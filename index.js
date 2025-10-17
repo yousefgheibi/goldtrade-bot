@@ -115,7 +115,6 @@ function saveTransaction(chatId, state) {
     price: state.price,
     weight: state.weight,
     desc: state.desc,
-    total: state.price * state.weight,
     date: new Date().toLocaleString("fa-IR"),
   };
 
