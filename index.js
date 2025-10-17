@@ -34,6 +34,9 @@ bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
+  // اگر پیام /start بود، از این هندلر عبور کن
+  if (text === "/start") return;
+
   // اگر کاربر در حال وارد کردن تراکنش است
   if (userState[chatId]?.step) {
     handleTransactionInput(chatId, text);
