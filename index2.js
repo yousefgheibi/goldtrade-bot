@@ -1,32 +1,23 @@
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 import { Parser } from "json2csv";
-// import 'dotenv/config';
-
 
 const token = "8240277790:AAGIj4t7pp_FfAWYLf3LAhD76SCAEmlIzjs";
-
-// ایجاد ربات با Polling
 const bot = new TelegramBot(token, { polling: true });
 
-// مسیر فایل ذخیره‌سازی داده‌ها
-const dataFile = "./transactions.json";
-if (!fs.existsSync(dataFile)) fs.writeFileSync(dataFile, "[]", "utf8");
-
-// مسیر پوشه خروجی
+const dataDir = "./data";
 const exportDir = "./exports";
+
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
 
-// حالت‌ها
 const userState = {};
 
-// 🏁 شروع کار با ربات
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   sendMainMenu(chatId);
 });
 
-// 📋 منوی اصلی
 function sendMainMenu(chatId) {
   bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌های زیر را انتخاب کنید:", {
     reply_markup: {
@@ -39,12 +30,14 @@ function sendMainMenu(chatId) {
   });
 }
 
-// 🎯 پردازش انتخاب کاربر
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  // نادیده گرفتن پیام‌ها در حین ورود داده
+  // اگر پیام /start بود، از این هندلر عبور کن
+  if (text === "/start") return;
+
+  // اگر کاربر در حال وارد کردن تراکنش است
   if (userState[chatId]?.step) {
     handleTransactionInput(chatId, text);
     return;
@@ -68,14 +61,13 @@ bot.on("message", (msg) => {
   }
 });
 
-// ✍️ شروع ثبت خرید/فروش
+
 function startTransaction(chatId, type) {
   userState[chatId] = { type, step: "name" };
   const label = type === "buy" ? "خریدار" : "فروشنده";
   bot.sendMessage(chatId, `👤 نام ${label} را وارد کنید:`);
 }
 
-// 🔄 دریافت اطلاعات مرحله به مرحله
 function handleTransactionInput(chatId, text) {
   const state = userState[chatId];
 
@@ -83,22 +75,23 @@ function handleTransactionInput(chatId, text) {
     case "name":
       state.name = text;
       state.step = "price";
-      bot.sendMessage(chatId, "💰 قیمت طلا / سکه / مثقال را وارد کنید:");
+      bot.sendMessage(chatId, "💰 مبلغ کل را وارد کنید (تومان):");
       break;
+
     case "price":
-      if (isNaN(text))
-        return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
       state.price = parseFloat(text);
       state.step = "weight";
-      bot.sendMessage(chatId, "⚖️ مقدار گرم را وارد کنید:");
+      bot.sendMessage(chatId, "⚖️ مقدار (گرم یا تعداد) را وارد کنید:");
       break;
+
     case "weight":
-      if (isNaN(text))
-        return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
       state.weight = parseFloat(text);
       state.step = "desc";
       bot.sendMessage(chatId, "📝 توضیحات (اختیاری):");
       break;
+
     case "desc":
       state.desc = text || "-";
       saveTransaction(chatId, state);
@@ -106,79 +99,96 @@ function handleTransactionInput(chatId, text) {
   }
 }
 
-// 💾 ذخیره تراکنش در فایل
 function saveTransaction(chatId, state) {
-  const transactions = JSON.parse(fs.readFileSync(dataFile));
+  const userFile = `${dataDir}/data_${chatId}.json`;
+  let transactions = [];
+  if (fs.existsSync(userFile)) {
+    transactions = JSON.parse(fs.readFileSync(userFile));
+  }
+
   const record = {
-    type: state.type,
-    name: state.name,
-    price: state.price,
-    weight: state.weight,
-    desc: state.desc,
+    type: state.type,          // خرید یا فروش
+    name: state.name,          // نام خریدار/فروشنده
+    typeItem: state.typeItem,  // نوع کالا
+    priceDay: state.priceDay,  // قیمت روز مثقال طلا
+    price: state.price,        // مبلغ کل
+    weight: state.weight,      // مقدار
+    desc: state.desc,          // توضیحات
     date: new Date().toLocaleString("fa-IR"),
   };
 
   transactions.push(record);
-  fs.writeFileSync(dataFile, JSON.stringify(transactions, null, 2));
+  fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
   bot.sendMessage(
     chatId,
-    `✅ تراکنش ${
-      state.type === "buy" ? "خرید" : "فروش"
-    } با موفقیت ثبت شد.\n💰 مبلغ کل: ${record.total.toLocaleString()}`
+    `✅ تراکنش ${state.type === "buy" ? "خرید" : "فروش"} ثبت شد.\n💰 مبلغ: ${record.price.toLocaleString("fa-IR")} تومان`
   );
 
+  showSummary(chatId);
   delete userState[chatId];
-  sendMainMenu(chatId);
 }
 
-// 📈 خلاصه وضعیت
 function showSummary(chatId) {
-  const transactions = JSON.parse(fs.readFileSync(dataFile));
+  const userFile = `${dataDir}/data_${chatId}.json`;
+  if (!fs.existsSync(userFile)) {
+    return bot.sendMessage(chatId, "❗ هنوز تراکنشی ثبت نکرده‌اید.");
+  }
+
+  const transactions = JSON.parse(fs.readFileSync(userFile));
 
   const totalBuy = transactions
     .filter((t) => t.type === "buy")
-    .reduce((sum, t) => sum + t.total, 0);
+    .reduce((sum, t) => sum + t.price, 0);
 
   const totalSell = transactions
     .filter((t) => t.type === "sell")
-    .reduce((sum, t) => sum + t.total, 0);
+    .reduce((sum, t) => sum + t.price, 0);
 
   const profit = totalSell - totalBuy;
 
   const message = `
 📊 خلاصه وضعیت:
 -------------------------
-🟢 مجموع خرید: ${totalBuy.toLocaleString()} تومان
-🔴 مجموع فروش: ${totalSell.toLocaleString()} تومان
-💎 سود / زیان خالص: ${profit.toLocaleString()} تومان
+🟢 مجموع خرید: ${totalBuy.toLocaleString("fa-IR")} تومان
+🔴 مجموع فروش: ${totalSell.toLocaleString("fa-IR")} تومان
+💎 سود / زیان خالص: ${profit.toLocaleString("fa-IR")} تومان
 -------------------------
-📅 تراکنش‌ها: ${transactions.length} عدد
+📅 تعداد تراکنش‌ها: ${transactions.length}
 `;
-
   bot.sendMessage(chatId, message);
 }
 
-// 📤 خروجی CSV و ارسال به کاربر
 function exportCSV(chatId) {
-  const transactions = JSON.parse(fs.readFileSync(dataFile));
-
-  if (!transactions.length) {
-    bot.sendMessage(chatId, "❗ داده‌ای برای خروجی وجود ندارد.");
-    return;
+  const userFile = `${dataDir}/data_${chatId}.json`;
+  if (!fs.existsSync(userFile)) {
+    return bot.sendMessage(chatId, "❗ هنوز تراکنشی ثبت نکرده‌اید.");
   }
 
-  const parser = new Parser();
+  const transactions = JSON.parse(fs.readFileSync(userFile));
+  if (!transactions.length) {
+    return bot.sendMessage(chatId, "❗ داده‌ای برای خروجی وجود ندارد.");
+  }
+
+  const parser = new Parser({
+    fields: ['type', 'name', 'price', 'weight', 'desc', 'date'],
+    transforms: [
+      (item) => ({
+        ...item,
+        price: `${item.price.toLocaleString("fa-IR")} تومان`
+      })
+    ]
+  });
+
   const csv = parser.parse(transactions);
 
-  const filePath = `${exportDir}/transactions_${Date.now()}.csv`;
+  const filePath = `${exportDir}/transactions_${chatId}_${Date.now()}.csv`;
   fs.writeFileSync(filePath, csv, "utf8");
 
-  bot
-    .sendDocument(chatId, filePath, {
-      caption: "📄 فایل خروجی تراکنش‌ها (CSV)",
-    })
-    .then(() => console.log("✅ CSV sent to user"))
+  bot.sendDocument(chatId, filePath, {
+    caption: "📄 فایل خروجی تراکنش‌ها (CSV)",
+  })
+    .then(() => console.log("✅ CSV sent to user", chatId))
     .catch((err) => {
       console.error("❌ Error sending CSV:", err);
       bot.sendMessage(chatId, "⚠️ خطایی در ارسال فایل رخ داد.");
