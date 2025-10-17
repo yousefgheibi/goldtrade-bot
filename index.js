@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 import { Parser } from "json2csv";
-import 'dotenv/config';
+// import 'dotenv/config';
 
 const token = "8240277790:AAGIj4t7pp_FfAWYLf3LAhD76SCAEmlIzjs";
 
