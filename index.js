@@ -1,30 +1,23 @@
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 import { Parser } from "json2csv";
-// import 'dotenv/config';
 
 const token = "8240277790:AAGIj4t7pp_FfAWYLf3LAhD76SCAEmlIzjs";
-
-// ایجاد ربات با Polling
 const bot = new TelegramBot(token, { polling: true });
 
-// مسیر پوشه داده‌ها و خروجی‌ها
 const dataDir = "./data";
 const exportDir = "./exports";
 
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
 
-// حالت‌ها برای ورود مرحله‌ای کاربر
 const userState = {};
 
-// 🏁 شروع کار با ربات
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   sendMainMenu(chatId);
 });
 
-// 📋 منوی اصلی
 function sendMainMenu(chatId) {
   bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌های زیر را انتخاب کنید:", {
     reply_markup: {
@@ -37,7 +30,6 @@ function sendMainMenu(chatId) {
   });
 }
 
-// 🎯 پردازش پیام کاربر
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
@@ -66,36 +58,19 @@ bot.on("message", (msg) => {
   }
 });
 
-// ✍️ شروع تراکنش
+
 function startTransaction(chatId, type) {
   userState[chatId] = { type, step: "name" };
   const label = type === "buy" ? "خریدار" : "فروشنده";
   bot.sendMessage(chatId, `👤 نام ${label} را وارد کنید:`);
 }
 
-// 🔄 دریافت اطلاعات مرحله‌ای
 function handleTransactionInput(chatId, text) {
   const state = userState[chatId];
 
   switch (state.step) {
     case "name":
       state.name = text;
-      state.step = "typeItem";
-      bot.sendMessage(chatId, "💎 نوع کالا را وارد کنید:\nطلا / سکه / آبشده");
-      break;
-
-    case "typeItem":
-      const validTypes = ["طلا", "سکه", "آبشده"];
-      if (!validTypes.includes(text))
-        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را وارد کنید: طلا / سکه / آبشده");
-      state.typeItem = text;
-      state.step = "priceDay";
-      bot.sendMessage(chatId, "💰 قیمت روز مثقال طلا را وارد کنید (تومان):");
-      break;
-
-    case "priceDay":
-      if (isNaN(text)) return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
-      state.priceDay = parseFloat(text);
       state.step = "price";
       bot.sendMessage(chatId, "💰 مبلغ کل را وارد کنید (تومان):");
       break;
@@ -121,7 +96,6 @@ function handleTransactionInput(chatId, text) {
   }
 }
 
-// 💾 ذخیره تراکنش در فایل جداگانه هر کاربر
 function saveTransaction(chatId, state) {
   const userFile = `${dataDir}/data_${chatId}.json`;
   let transactions = [];
@@ -143,16 +117,15 @@ function saveTransaction(chatId, state) {
   transactions.push(record);
   fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
-  // فقط پیام موفقیت
   bot.sendMessage(
     chatId,
     `✅ تراکنش ${state.type === "buy" ? "خرید" : "فروش"} ثبت شد.\n💰 مبلغ: ${record.price.toLocaleString("fa-IR")} تومان`
   );
 
+  showSummary(chatId);
   delete userState[chatId];
 }
 
-// 📈 نمایش خلاصه وضعیت همان کاربر
 function showSummary(chatId) {
   const userFile = `${dataDir}/data_${chatId}.json`;
   if (!fs.existsSync(userFile)) {
@@ -183,7 +156,6 @@ function showSummary(chatId) {
   bot.sendMessage(chatId, message);
 }
 
-// 📤 خروجی CSV برای همان کاربر
 function exportCSV(chatId) {
   const userFile = `${dataDir}/data_${chatId}.json`;
   if (!fs.existsSync(userFile)) {
@@ -196,7 +168,7 @@ function exportCSV(chatId) {
   }
 
   const parser = new Parser({
-    fields: ['type', 'name', 'typeItem', 'priceDay', 'price', 'weight', 'desc', 'date'],
+    fields: ['type', 'name', 'price', 'weight', 'desc', 'date'],
     transforms: [
       (item) => ({
         ...item,
