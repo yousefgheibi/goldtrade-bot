@@ -1,6 +1,7 @@
 {
   "name": "gold-trade-bot",
   "version": "1.0.0",
+  "description": "ربات حسابداری خرید و فروش طلا با Node.js و Telegram",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -9,8 +10,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
+    "dotenv": "^17.2.3",
+    "env": "^0.0.2",
     "fs": "^0.0.1-security",
     "json2csv": "^6.0.0-alpha.2",
     "node-telegram-bot-api": "^0.63.0"
