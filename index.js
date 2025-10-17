@@ -1,21 +1,21 @@
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 import { Parser } from "json2csv";
-// import 'dotenv/config'; // برای خواندن .env
+import 'dotenv/config';
 
 const token = "8240277790:AAGIj4t7pp_FfAWYLf3LAhD76SCAEmlIzjs";
 
 // ایجاد ربات با Polling
 const bot = new TelegramBot(token, { polling: true });
 
-// مسیر پوشه ذخیره داده‌ها و خروجی‌ها
+// مسیر پوشه داده‌ها و خروجی‌ها
 const dataDir = "./data";
 const exportDir = "./exports";
 
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
 
-// حالت‌ها
+// حالت‌ها برای ورود مرحله‌ای کاربر
 const userState = {};
 
 // 🏁 شروع کار با ربات
@@ -80,21 +80,40 @@ function handleTransactionInput(chatId, text) {
   switch (state.step) {
     case "name":
       state.name = text;
-      state.step = "price";
-      bot.sendMessage(chatId, "💰 مبلغ کل را وارد کنید:");
+      state.step = "typeItem";
+      bot.sendMessage(chatId, "💎 نوع کالا را وارد کنید:\nطلا / سکه / آبشده");
       break;
+
+    case "typeItem":
+      const validTypes = ["طلا", "سکه", "آبشده"];
+      if (!validTypes.includes(text))
+        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را وارد کنید: طلا / سکه / آبشده");
+      state.typeItem = text;
+      state.step = "priceDay";
+      bot.sendMessage(chatId, "💰 قیمت روز مثقال طلا را وارد کنید (تومان):");
+      break;
+
+    case "priceDay":
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
+      state.priceDay = parseFloat(text);
+      state.step = "price";
+      bot.sendMessage(chatId, "💰 مبلغ کل را وارد کنید (تومان):");
+      break;
+
     case "price":
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
       state.price = parseFloat(text);
       state.step = "weight";
       bot.sendMessage(chatId, "⚖️ مقدار (گرم یا تعداد) را وارد کنید:");
       break;
+
     case "weight":
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
       state.weight = parseFloat(text);
       state.step = "desc";
       bot.sendMessage(chatId, "📝 توضیحات (اختیاری):");
       break;
+
     case "desc":
       state.desc = text || "-";
       saveTransaction(chatId, state);
@@ -111,24 +130,26 @@ function saveTransaction(chatId, state) {
   }
 
   const record = {
-    type: state.type,
-    name: state.name,
-    price: state.price, // مبلغ کل که کاربر وارد کرده
-    weight: state.weight,
-    desc: state.desc,
+    type: state.type,          // خرید یا فروش
+    name: state.name,          // نام خریدار/فروشنده
+    typeItem: state.typeItem,  // نوع کالا
+    priceDay: state.priceDay,  // قیمت روز مثقال طلا
+    price: state.price,        // مبلغ کل
+    weight: state.weight,      // مقدار
+    desc: state.desc,          // توضیحات
     date: new Date().toLocaleString("fa-IR"),
   };
 
   transactions.push(record);
   fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
+  // فقط پیام موفقیت
   bot.sendMessage(
     chatId,
-    `✅ تراکنش ${state.type === "buy" ? "خرید" : "فروش"} ثبت شد.\n💰 مبلغ: ${record.price.toLocaleString()} تومان`
+    `✅ تراکنش ${state.type === "buy" ? "خرید" : "فروش"} ثبت شد.\n💰 مبلغ: ${record.price.toLocaleString("fa-IR")} تومان`
   );
 
   delete userState[chatId];
-  sendMainMenu(chatId);
 }
 
 // 📈 نمایش خلاصه وضعیت همان کاربر
@@ -153,9 +174,9 @@ function showSummary(chatId) {
   const message = `
 📊 خلاصه وضعیت:
 -------------------------
-🟢 مجموع خرید: ${totalBuy.toLocaleString()} تومان
-🔴 مجموع فروش: ${totalSell.toLocaleString()} تومان
-💎 سود / زیان خالص: ${profit.toLocaleString()} تومان
+🟢 مجموع خرید: ${totalBuy.toLocaleString("fa-IR")} تومان
+🔴 مجموع فروش: ${totalSell.toLocaleString("fa-IR")} تومان
+💎 سود / زیان خالص: ${profit.toLocaleString("fa-IR")} تومان
 -------------------------
 📅 تعداد تراکنش‌ها: ${transactions.length}
 `;
@@ -174,7 +195,17 @@ function exportCSV(chatId) {
     return bot.sendMessage(chatId, "❗ داده‌ای برای خروجی وجود ندارد.");
   }
 
-  const parser = new Parser();
+  const parser = new Parser({
+    fields: ['type', 'name', 'typeItem', 'priceDay', 'price', 'weight', 'desc', 'date'],
+    transforms: [
+      (item) => ({
+        ...item,
+        priceDay: `${item.priceDay.toLocaleString("fa-IR")} تومان`,
+        price: `${item.price.toLocaleString("fa-IR")} تومان`
+      })
+    ]
+  });
+
   const csv = parser.parse(transactions);
 
   const filePath = `${exportDir}/transactions_${chatId}_${Date.now()}.csv`;
