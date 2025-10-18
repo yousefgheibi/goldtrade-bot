@@ -13,9 +13,11 @@ bot.deleteWebHook().then(() => {
 
 const dataFile = "./transactions.json";
 if (!fs.existsSync(dataFile)) fs.writeFileSync(dataFile, "[]", "utf8");
-
-const exportDir = "./exports";
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
+
+const dataDir = "./data";
+const exportDir = "./exports";
+
 
 const userState = {};
 
@@ -100,28 +102,32 @@ function handleTransactionInput(chatId, text) {
 }
 
 function saveTransaction(chatId, state) {
-  const transactions = JSON.parse(fs.readFileSync(dataFile));
+  const userFile = `${dataDir}/data_${chatId}.json`;
+  let transactions = [];
+  if (fs.existsSync(userFile)) {
+    transactions = JSON.parse(fs.readFileSync(userFile));
+  }
+
   const record = {
-    type: state.type,
-    name: state.name,
-    price: state.price,
-    weight: state.weight,
-    desc: state.desc,
+    type: state.type,          // خرید یا فروش
+    name: state.name,          // نام خریدار/فروشنده
+    price: state.price,        // مبلغ کل
+    weight: state.weight,      // مقدار
+    desc: state.desc,          // توضیحات
     date: new Date().toLocaleString("fa-IR"),
   };
 
   transactions.push(record);
-  fs.writeFileSync(dataFile, JSON.stringify(transactions, null, 2));
+  fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
   bot.sendMessage(
     chatId,
     `✅ تراکنش ${state.type === "buy" ? "خرید" : "فروش"} ثبت شد.\n💰 مبلغ: ${record.price.toLocaleString("fa-IR")} تومان`
   );
 
+  showSummary(chatId);
   delete userState[chatId];
-  // sendMainMenu(chatId);
 }
-
 function showSummary(chatId) {
   const userFile = `${dataDir}/data_${chatId}.json`;
   if (!fs.existsSync(userFile)) {
