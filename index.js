@@ -2,7 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 import { Parser } from "json2csv";
 
-const token = "8240277790:AAGIj4t7pp_FfAWYLf3LAhD76SCAEmlIzjs";
+const token = "8240277790:AAGue1wI4tQcrevrlzHvMLyg4madEsbZq70";
 const bot = new TelegramBot(token, { polling: true });
 
 const dataFile = "./transactions.json";
