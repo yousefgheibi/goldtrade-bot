@@ -1,6 +1,5 @@
 {
   "name": "gold-trade-bot",
-  "type": "module",
   "version": "1.0.0",
   "description": "ربات حسابداری خرید و فروش طلا با Node.js و Telegram",
   "main": "index.js",
