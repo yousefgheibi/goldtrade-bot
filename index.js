@@ -5,6 +5,12 @@ import { Parser } from "json2csv";
 const token = "8240277790:AAGue1wI4tQcrevrlzHvMLyg4madEsbZq70";
 const bot = new TelegramBot(token, { polling: true });
 
+// حذف webhook قبل از شروع polling
+bot.deleteWebHook().then(() => {
+  console.log("✅ Webhook deleted. Starting polling...");
+  bot.startPolling();
+});
+
 const dataFile = "./transactions.json";
 if (!fs.existsSync(dataFile)) fs.writeFileSync(dataFile, "[]", "utf8");
 
