@@ -12,16 +12,35 @@ bot.deleteWebHook().then(() => {
 
 const dataDir = "./data";
 const exportDir = "./exports";
+const usersFile = "./users.json";
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
+if (!fs.existsSync(usersFile)) fs.writeFileSync(usersFile, "[]", "utf8");
 
+const ADMIN_CHAT_ID = 507528648;
 const userState = {};
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  console.log("👤 Chat ID:", msg.chat.id)
+  const name = msg.from.first_name || "کاربر";
+  registerUser(chatId, name);
+  
   sendMainMenu(chatId);
 });
+
+function registerUser(chatId, name) {
+  const users = JSON.parse(fs.readFileSync(usersFile));
+  const exists = users.find((u) => u.chatId === chatId);
+  if (!exists) {
+    users.push({ chatId, name, date: new Date().toLocaleString("fa-IR") });
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+    bot.sendMessage(
+      ADMIN_CHAT_ID,
+      `📢 کاربر جدید ثبت شد!\n👤 نام: ${name}\n🆔 Chat ID: ${chatId}`
+    );
+  }
+}
 
 function sendMainMenu(chatId) {
   bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌های زیر را انتخاب کنید:", {
