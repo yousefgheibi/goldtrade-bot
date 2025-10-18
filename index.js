@@ -19,6 +19,7 @@ const userState = {};
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
+  console.log("👤 Chat ID:", msg.chat.id)
   sendMainMenu(chatId);
 });
 
