@@ -1,8 +1,9 @@
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
 import { Parser } from "json2csv";
+require('dotenv').config();
 
-const token = "8240277790:AAGue1wI4tQcrevrlzHvMLyg4madEsbZq70";
+const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: false });
 
 bot.deleteWebHook().then(() => {
