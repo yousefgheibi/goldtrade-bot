@@ -11,7 +11,7 @@ export function handleStart(msg) {
   const chatId = msg.chat.id;
   const name = msg.from.first_name || "کاربر";
   registerUser(chatId, name);
-  sendMainMenu(chatId);
+  // sendMainMenu(chatId);
 }
 
 export function handleApprove(msg, match) {
