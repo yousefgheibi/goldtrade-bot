@@ -72,6 +72,7 @@ function handleInput(chatId, text) {
   const state = userState[chatId];
 
   switch (state.step) {
+    // --- گرفتن نام خریدار/فروشنده ---
     case "name":
       state.name = text;
       state.step = "itemType";
@@ -84,16 +85,22 @@ function handleInput(chatId, text) {
       });
       break;
 
+    // --- انتخاب نوع کالا ---
     case "itemType":
       if (!["طلا", "سکه", "ارز"].includes(text))
         return bot.sendMessage(
           chatId,
           "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید."
         );
+
       state.itemType = text;
+
       if (text === "طلا") {
         state.step = "priceMithqal";
-        bot.sendMessage(chatId, "💰 لطفاً قیمت روز مثقال طلا را وارد کنید:");
+        bot.sendMessage(
+          chatId,
+          "💰 لطفاً قیمت روز مثقال طلا (به تومان) را وارد کنید:"
+        );
       } else if (text === "سکه") {
         state.step = "coinType";
         bot.sendMessage(chatId, "🪙 لطفاً نوع سکه را انتخاب کنید:", {
@@ -115,47 +122,72 @@ function handleInput(chatId, text) {
       }
       break;
 
+    // --- طلا ---
     case "priceMithqal":
-      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      if (isNaN(text))
+        return bot.sendMessage(chatId, "❌ لطفاً فقط عدد وارد کنید.");
       state.priceMithqal = Number(text);
       state.step = "amount";
-      bot.sendMessage(chatId, "💵 مبلغ کل خرید یا فروش را وارد کنید:");
+      bot.sendMessage(
+        chatId,
+        "💵 مبلغ کل خرید یا فروش (به تومان) را وارد کنید:"
+      );
       break;
+
     case "amount":
-      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      if (isNaN(text))
+        return bot.sendMessage(chatId, "❌ لطفاً فقط عدد وارد کنید.");
       state.amount = Number(text);
+
       if (state.itemType === "طلا") {
         state.weight = parseFloat(
           ((state.amount / state.priceMithqal) * 4.3318).toFixed(3)
         );
         state.step = "desc";
         bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
-      } else state.step = "quantity";
-      bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      } else {
+        state.step = "quantity";
+        bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      }
       break;
+
+    // --- سکه و ارز ---
     case "coinType":
       state.coinType = text;
       state.step = "basePrice";
-      bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
+      bot.sendMessage(
+        chatId,
+        "💰 لطفاً قیمت پایه سکه (به تومان) را وارد کنید:"
+      );
       break;
+
     case "currencyType":
       state.currencyType = text;
       state.step = "basePrice";
-      bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
+      bot.sendMessage(
+        chatId,
+        "💰 لطفاً قیمت پایه ارز (به تومان) را وارد کنید:"
+      );
       break;
+
     case "basePrice":
-      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      if (isNaN(text))
+        return bot.sendMessage(chatId, "❌ لطفاً فقط عدد وارد کنید.");
       state.basePrice = Number(text);
       state.step = "quantity";
       bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
       break;
+
     case "quantity":
-      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      if (isNaN(text))
+        return bot.sendMessage(chatId, "❌ لطفاً فقط عدد وارد کنید.");
       state.quantity = Number(text);
       state.amount = state.basePrice * state.quantity;
       state.step = "desc";
       bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
       break;
+
+    // --- توضیحات و ذخیره ---
     case "desc":
       state.desc = text || "-";
       saveTransaction(chatId, state);
