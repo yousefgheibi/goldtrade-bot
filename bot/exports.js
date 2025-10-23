@@ -40,3 +40,80 @@ export function exportExcel(chatId) {
   XLSX.writeFile(workbook, filePath);
   bot.sendDocument(chatId, filePath);
 }
+
+export function exportUsers(chatId) {
+  if (!fs.existsSync(USERS_FILE))
+    return bot.sendMessage(chatId, "❗ هیچ کاربری ثبت نشده است.");
+
+  const users = JSON.parse(fs.readFileSync(USERS_FILE));
+  if (!users.length)
+    return bot.sendMessage(chatId, "❗ هیچ کاربری ثبت نشده است.");
+
+  const formatted = users.map((u) => ({
+    "نام": u.name,
+    "شناسه چت": u.chatId,
+    "وضعیت": u.status,
+    "تاریخ ثبت": u.date,
+    "تاریخ انقضا": u.approvedUntil
+      ? new Date(u.approvedUntil).toLocaleDateString("fa-IR")
+      : "-",
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(formatted);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "کاربران");
+
+  const excelPath = `./exports/users_${Date.now()}.xlsx`;
+  XLSX.writeFile(workbook, excelPath);
+
+  const zip = new AdmZip();
+  zip.addLocalFile(excelPath);
+  const zipPath = `./exports/users_export_${Date.now()}.zip`;
+  zip.writeZip(zipPath);
+
+  bot.sendDocument(chatId, zipPath);
+
+  setTimeout(() => {
+    fs.unlinkSync(excelPath);
+    fs.unlinkSync(zipPath);
+  }, 5000);
+}
+
+export function exportAllData(chatId) {
+  if (!fs.existsSync(DATA_DIR))
+    return bot.sendMessage(chatId, "❗ هیچ داده‌ای برای بکاپ وجود ندارد.");
+
+  const files = fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("data_"));
+  if (!files.length)
+    return bot.sendMessage(chatId, "❗ هیچ داده‌ای برای بکاپ وجود ندارد.");
+
+  let allData = [];
+  for (const file of files) {
+    const content = JSON.parse(fs.readFileSync(`${DATA_DIR}/${file}`));
+    allData = allData.concat(content);
+  }
+
+  if (!allData.length)
+    return bot.sendMessage(chatId, "❗ هیچ تراکنشی ثبت نشده است.");
+
+  const worksheet = XLSX.utils.json_to_sheet(allData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "بکاپ");
+
+  const excelPath = `./exports/backup_${Date.now()}.xlsx`;
+  XLSX.writeFile(workbook, excelPath);
+
+  const zip = new AdmZip();
+  zip.addLocalFile(excelPath);
+  zip.addLocalFile(USERS_FILE);
+  zip.addLocalFolder(DATA_DIR, "data");
+  const zipPath = `./exports/backup_full_${Date.now()}.zip`;
+  zip.writeZip(zipPath);
+
+  bot.sendDocument(chatId, zipPath);
+
+  setTimeout(() => {
+    fs.unlinkSync(excelPath);
+    fs.unlinkSync(zipPath);
+  }, 5000);
+}

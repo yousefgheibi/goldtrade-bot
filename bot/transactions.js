@@ -57,6 +57,12 @@ export function handleMessage(msg) {
     case "📤 خروجی فایل":
       exportExcel(chatId);
       break;
+    case "📤 خروجی کاربران":
+      exportUsers(chatId);
+      break;
+    case "💾 بکاپ کل داده‌ها":
+      exportAllData(chatId);
+      break;
     default:
       sendMainMenu(chatId);
   }
