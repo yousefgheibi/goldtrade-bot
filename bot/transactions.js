@@ -184,7 +184,7 @@ function saveTransaction(chatId, record) {
     });
   });
 
-  setTimeout(() => sendMainMenu(chatId), 1000);
+  setTimeout(() => sendMainMenu(chatId), 2000);
 }
 
 function showSummary(chatId) {

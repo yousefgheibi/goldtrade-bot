@@ -13,7 +13,7 @@ export function sendMainMenu(chatId) {
     ];
   }
 
-  bot.sendMessage(chatId, "‌", {
+  bot.sendMessage(chatId, "لطفاً گزینه را انتخاب کنید:", {
     reply_markup: {
       keyboard,
       resize_keyboard: true,
