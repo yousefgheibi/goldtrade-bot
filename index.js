@@ -3,6 +3,8 @@ import fs from "fs";
 import XLSX from "xlsx";
 import { createCanvas, registerFont } from "canvas";
 import dotenv from "dotenv";
+import AdmZip from "adm-zip";
+
 dotenv.config({ debug: false });
 
 registerFont("./assets/font/vazirmatn.ttf", { family: "Vazirmatn" });
@@ -70,15 +72,24 @@ function registerUser(chatId, name) {
 
 // 🧾 منوی اصلی
 function sendMainMenu(chatId) {
-  bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌ها را انتخاب کنید:", {
-    reply_markup: {
-      keyboard: [
-        ["🟢 ثبت خرید", "🔴 ثبت فروش"],
-        ["📈 خلاصه وضعیت", "📤 خروجی فایل"],
-      ],
-      resize_keyboard: true,
-    },
-  });
+  if (chatId === ADMIN_CHAT_ID) {
+    bot.sendMessage(chatId, "🛠 منوی ادمین:", {
+      reply_markup: {
+        keyboard: [["📤 خروجی کاربران", "💾 بکاپ کل داده‌ها"]],
+        resize_keyboard: true,
+      },
+    });
+  } else {
+    bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌ها را انتخاب کنید:", {
+      reply_markup: {
+        keyboard: [
+          ["🟢 ثبت خرید", "🔴 ثبت فروش"],
+          ["📈 خلاصه وضعیت", "📤 خروجی فایل"],
+        ],
+        resize_keyboard: true,
+      },
+    });
+  }
 }
 
 // 🎯 بررسی وضعیت کاربر قبل از هر پیام
@@ -93,11 +104,9 @@ bot.on("message", (msg) => {
   if (!user)
     return bot.sendMessage(chatId, "⚠️ لطفاً ابتدا دستور /start را ارسال کنید.");
 
-  // اگر منتظر تایید است
   if (user.status === "pending")
     return bot.sendMessage(chatId, "⏳ درخواست شما در انتظار تأیید ادمین است.");
 
-  // اگر تاریخ تایید منقضی شده
   if (
     user.status === "expired" ||
     (user.approvedUntil && new Date() > new Date(user.approvedUntil))
@@ -110,7 +119,12 @@ bot.on("message", (msg) => {
     );
   }
 
-  // ادامه‌ی روند اصلی
+  // 🛠 منوی مخصوص ادمین
+  if (chatId === ADMIN_CHAT_ID) {
+    if (text === "📤 خروجی کاربران") return exportUsers(chatId);
+    if (text === "💾 بکاپ کل داده‌ها") return exportAllData(chatId);
+  }
+
   if (userState[chatId]?.step) {
     handleInput(chatId, text);
     return;
@@ -376,7 +390,7 @@ function showSummary(chatId) {
   bot.sendMessage(chatId, msg);
 }
 
-// 📤 خروجی اکسل
+// 📤 خروجی اکسل کاربر
 function exportExcel(chatId) {
   const userFile = `${dataDir}/data_${chatId}.json`;
   if (!fs.existsSync(userFile))
@@ -404,9 +418,6 @@ function exportExcel(chatId) {
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(formattedData);
-  const colsWidth = Object.keys(formattedData[0]).map(() => ({ wch: 25 }));
-  worksheet["!cols"] = colsWidth;
-
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "تراکنش‌ها");
 
@@ -415,28 +426,99 @@ function exportExcel(chatId) {
   bot.sendDocument(chatId, filePath);
 }
 
-// ✅ دستور تایید ادمین
+// 📤 خروجی کاربران (ادمین)
+function exportUsers(chatId) {
+  const users = JSON.parse(fs.readFileSync(usersFile));
+  if (!users.length)
+    return bot.sendMessage(chatId, "❗ هیچ کاربری ثبت نشده است.");
+
+  const formatted = users.map((u) => ({
+    "نام": u.name,
+    "شناسه چت": u.chatId,
+    "وضعیت": u.status,
+    "تاریخ ثبت": u.date,
+    "تاریخ انقضا": u.approvedUntil
+      ? new Date(u.approvedUntil).toLocaleDateString("fa-IR")
+      : "-",
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(formatted);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "کاربران");
+
+  const excelPath = `${exportDir}/users_${Date.now()}.xlsx`;
+  XLSX.writeFile(workbook, excelPath);
+
+  const zip = new AdmZip();
+  zip.addLocalFile(excelPath);
+  const zipPath = `${exportDir}/users_export_${Date.now()}.zip`;
+  zip.writeZip(zipPath);
+
+  bot.sendDocument(chatId, zipPath);
+
+  setTimeout(() => {
+    fs.unlinkSync(excelPath);
+    fs.unlinkSync(zipPath);
+  }, 5000);
+}
+
+// 💾 بکاپ کل داده‌ها (ادمین)
+function exportAllData(chatId) {
+  const files = fs.readdirSync(dataDir).filter((f) => f.startsWith("data_"));
+  if (!files.length)
+    return bot.sendMessage(chatId, "❗ هیچ داده‌ای برای بکاپ وجود ندارد.");
+
+  let allData = [];
+  for (const file of files) {
+    const content = JSON.parse(fs.readFileSync(`${dataDir}/${file}`));
+    allData = allData.concat(content);
+  }
+
+  if (!allData.length)
+    return bot.sendMessage(chatId, "❗ هیچ تراکنشی ثبت نشده است.");
+
+  const worksheet = XLSX.utils.json_to_sheet(allData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "بکاپ");
+
+  const excelPath = `${exportDir}/backup_${Date.now()}.xlsx`;
+  XLSX.writeFile(workbook, excelPath);
+
+  const zip = new AdmZip();
+  zip.addLocalFile(excelPath);
+  zip.addLocalFile(usersFile);
+  zip.addLocalFolder(dataDir, "data");
+  const zipPath = `${exportDir}/backup_full_${Date.now()}.zip`;
+  zip.writeZip(zipPath);
+
+  bot.sendDocument(chatId, zipPath);
+
+  setTimeout(() => {
+    fs.unlinkSync(excelPath);
+    fs.unlinkSync(zipPath);
+  }, 5000);
+}
+
 bot.onText(/\/approve (.+)/, (msg, match) => {
   const chatId = msg.chat.id;
   if (chatId !== ADMIN_CHAT_ID)
-    return bot.sendMessage(chatId, "⛔️ فقط ادمین مجاز به این دستور است.");
+    return bot.sendMessage(chatId, "⛔ شما دسترسی ادمین ندارید.");
 
   const targetChatId = parseInt(match[1]);
   const users = JSON.parse(fs.readFileSync(usersFile));
   const user = users.find((u) => u.chatId === targetChatId);
 
-  if (!user) return bot.sendMessage(chatId, "❌ کاربر یافت نشد.");
-
-  const approvedUntil = new Date();
-  approvedUntil.setDate(approvedUntil.getDate() + APPROVAL_DURATION_DAYS);
+  if (!user) return bot.sendMessage(chatId, "❗ کاربر یافت نشد.");
 
   user.status = "approved";
-  user.approvedUntil = approvedUntil.toISOString();
+  user.approvedUntil = new Date(
+    Date.now() + APPROVAL_DURATION_DAYS * 24 * 60 * 60 * 1000
+  );
   fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 
-  bot.sendMessage(targetChatId, "✅ دسترسی شما برای ۳۰ روز فعال شد.");
+  bot.sendMessage(chatId, `✅ کاربر ${user.name} تأیید شد.`);
   bot.sendMessage(
-    chatId,
-    `✅ کاربر ${user.name} تا ${approvedUntil.toLocaleDateString("fa-IR")} فعال شد.`
+    targetChatId,
+    "✅ دسترسی شما تا ۳۰ روز آینده فعال شد. حالا می‌توانید از ربات استفاده کنید."
   );
 });
