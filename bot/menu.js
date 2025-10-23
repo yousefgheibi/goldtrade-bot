@@ -5,7 +5,7 @@ export function sendMainMenu(chatId) {
   let keyboard;
 
   if (chatId === ADMIN_CHAT_ID) {
-    keyboard = [["📤 خروجی کاربران", "💾 بکاپ کل داده‌ها"]];
+    keyboard = [["کاربران", "بکاپ"]];
   } else {
     keyboard = [
       ["🟢 ثبت خرید", "🔴 ثبت فروش"],

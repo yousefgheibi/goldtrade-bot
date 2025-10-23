@@ -57,10 +57,10 @@ export function handleMessage(msg) {
     case "📤 خروجی فایل":
       exportExcel(chatId);
       break;
-    case "📤 خروجی کاربران":
+    case "کاربران":
       exportUsers(chatId);
       break;
-    case "💾 بکاپ کل داده‌ها":
+    case "بکاپ":
       exportAllData(chatId);
       break;
   }
