@@ -1,217 +1,442 @@
 import TelegramBot from "node-telegram-bot-api";
 import fs from "fs";
-import { Parser } from "json2csv";
+import XLSX from "xlsx";
+import { createCanvas, registerFont } from "canvas";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ debug: false });
 
-
+registerFont("./assets/font/vazirmatn.ttf", { family: "Vazirmatn" });
 const token = process.env.TELEGRAM_TOKEN;
-const bot = new TelegramBot(token, { polling: false });
-
-bot.deleteWebHook().then(() => {
-  console.log("✅ Webhook deleted. Starting polling...");
-  bot.startPolling();
-});
+const bot = new TelegramBot(token, { polling: true });
 
 const dataDir = "./data";
 const exportDir = "./exports";
 const usersFile = "./users.json";
+
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir);
 if (!fs.existsSync(usersFile)) fs.writeFileSync(usersFile, "[]", "utf8");
 
 const ADMIN_CHAT_ID = 507528648;
+const APPROVAL_DURATION_DAYS = 30;
 const userState = {};
 
+// 🟢 استارت بات
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const name = msg.from.first_name || "کاربر";
   registerUser(chatId, name);
-  
   sendMainMenu(chatId);
 });
 
+// 🟠 ثبت کاربر جدید یا بررسی تایید
 function registerUser(chatId, name) {
   const users = JSON.parse(fs.readFileSync(usersFile));
-  const exists = users.find((u) => u.chatId === chatId);
-  if (!exists) {
-    users.push({ chatId, name, date: new Date().toLocaleString("fa-IR") });
+  let user = users.find((u) => u.chatId === chatId);
+
+  if (!user) {
+    user = {
+      chatId,
+      name,
+      date: new Date().toLocaleString("fa-IR", { timeZone: "Asia/Tehran" }),
+      status: "pending",
+      approvedUntil: null,
+    };
+    users.push(user);
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 
     bot.sendMessage(
       ADMIN_CHAT_ID,
-      `📢 کاربر جدید ثبت شد!\n👤 نام: ${name}\n🆔 Chat ID: ${chatId}`
+      `📢 کاربر جدید درخواست دسترسی داده:\n👤 ${name}\n🆔 ${chatId}\n\nبرای تأیید تا ۳۰ روز آینده دستور زیر را ارسال کن:\n/approve ${chatId}`
     );
+
+    bot.sendMessage(
+      chatId,
+      "⏳ درخواست شما برای استفاده از ربات ثبت شد. لطفاً منتظر تأیید ادمین باشید."
+    );
+  } else {
+    if (user.status === "approved") {
+      sendMainMenu(chatId);
+    } else if (user.status === "expired") {
+      bot.sendMessage(
+        chatId,
+        "❌ مدت اعتبار شما منقضی شده است. لطفاً منتظر تأیید مجدد باشید."
+      );
+    } else {
+      bot.sendMessage(chatId, "⏳ درخواست شما در انتظار تأیید ادمین است.");
+    }
   }
 }
 
+// 🧾 منوی اصلی
 function sendMainMenu(chatId) {
-  bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌های زیر را انتخاب کنید:", {
+  bot.sendMessage(chatId, "📊 لطفاً یکی از گزینه‌ها را انتخاب کنید:", {
     reply_markup: {
       keyboard: [
         ["🟢 ثبت خرید", "🔴 ثبت فروش"],
-        ["📈 خلاصه وضعیت", "📤 خروجی CSV"],
+        ["📈 خلاصه وضعیت", "📤 خروجی فایل"],
       ],
       resize_keyboard: true,
     },
   });
 }
 
+// 🎯 بررسی وضعیت کاربر قبل از هر پیام
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
+  if (text === "/start" || text.startsWith("/approve")) return;
 
-  if (text === "/start") return; // جلوگیری از دوباره اجرا شدن
+  const users = JSON.parse(fs.readFileSync(usersFile));
+  const user = users.find((u) => u.chatId === chatId);
 
+  if (!user)
+    return bot.sendMessage(chatId, "⚠️ لطفاً ابتدا دستور /start را ارسال کنید.");
+
+  // اگر منتظر تایید است
+  if (user.status === "pending")
+    return bot.sendMessage(chatId, "⏳ درخواست شما در انتظار تأیید ادمین است.");
+
+  // اگر تاریخ تایید منقضی شده
+  if (
+    user.status === "expired" ||
+    (user.approvedUntil && new Date() > new Date(user.approvedUntil))
+  ) {
+    user.status = "expired";
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+    return bot.sendMessage(
+      chatId,
+      "❌ مدت اعتبار شما به پایان رسیده است. لطفاً منتظر تأیید مجدد باشید."
+    );
+  }
+
+  // ادامه‌ی روند اصلی
   if (userState[chatId]?.step) {
-    handleTransactionInput(chatId, text);
+    handleInput(chatId, text);
     return;
   }
 
   switch (text) {
     case "🟢 ثبت خرید":
-      startTransaction(chatId, "buy");
+      userState[chatId] = { type: "buy", step: "name" };
+      bot.sendMessage(chatId, "👤 لطفاً نام خریدار را وارد کنید:");
       break;
     case "🔴 ثبت فروش":
-      startTransaction(chatId, "sell");
+      userState[chatId] = { type: "sell", step: "name" };
+      bot.sendMessage(chatId, "👤 لطفاً نام فروشنده را وارد کنید:");
       break;
     case "📈 خلاصه وضعیت":
       showSummary(chatId);
       break;
-    case "📤 خروجی CSV":
-      exportCSV(chatId);
+    case "📤 خروجی فایل":
+      exportExcel(chatId);
       break;
     default:
       sendMainMenu(chatId);
   }
 });
 
-function startTransaction(chatId, type) {
-  userState[chatId] = { type, step: "name" };
-  const label = type === "buy" ? "خریدار" : "فروشنده";
-  bot.sendMessage(chatId, `👤 نام ${label} را وارد کنید:`);
-}
-
-function handleTransactionInput(chatId, text) {
+// 🧩 تابع ثبت تراکنش
+function handleInput(chatId, text) {
   const state = userState[chatId];
 
   switch (state.step) {
     case "name":
       state.name = text;
-      state.step = "price";
-      bot.sendMessage(chatId, "💰 قیمت (به تومان) را وارد کنید:");
+      state.step = "itemType";
+      bot.sendMessage(chatId, "🏷 لطفاً نوع کالا را انتخاب کنید:", {
+        reply_markup: {
+          keyboard: [["طلا", "سکه", "ارز"]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
+      });
       break;
-    case "price":
-      if (isNaN(text))
-        return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
-      state.price = Number(text);
-      state.step = "weight";
-      bot.sendMessage(chatId, "⚖️ مقدار (گرم) را وارد کنید:");
+
+    case "itemType":
+      if (!["طلا", "سکه", "ارز"].includes(text))
+        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید.");
+      state.itemType = text;
+
+      if (text === "طلا") {
+        state.step = "priceMithqal";
+        bot.sendMessage(chatId, "💰 لطفاً قیمت روز مثقال طلا را وارد کنید:");
+      } else if (text === "سکه") {
+        state.step = "coinType";
+        bot.sendMessage(chatId, "🪙 لطفاً نوع سکه را انتخاب کنید:", {
+          reply_markup: {
+            keyboard: [["ربع", "نیم", "تمام"]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        });
+      } else if (text === "ارز") {
+        state.step = "currencyType";
+        bot.sendMessage(chatId, "💵 لطفاً نوع ارز را انتخاب کنید:", {
+          reply_markup: {
+            keyboard: [["دلار", "یورو", "لیر"]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        });
+      }
       break;
-    case "weight":
-      if (isNaN(text))
-        return bot.sendMessage(chatId, "❌ لطفاً عدد وارد کنید.");
-      state.weight = Number(text);
+
+    case "priceMithqal":
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      state.priceMithqal = Number(text);
+      state.step = "amount";
+      bot.sendMessage(chatId, "💵 مبلغ کل خرید یا فروش را وارد کنید:");
+      break;
+
+    case "amount":
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      state.amount = Number(text);
+      if (state.itemType === "طلا") {
+        state.weight = parseFloat(
+          ((state.amount / state.priceMithqal) * 4.3318).toFixed(3)
+        );
+        state.step = "desc";
+        bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
+      } else {
+        state.step = "quantity";
+        bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      }
+      break;
+
+    case "coinType":
+      state.coinType = text;
+      state.step = "basePrice";
+      bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
+      break;
+
+    case "currencyType":
+      state.currencyType = text;
+      state.step = "basePrice";
+      bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
+      break;
+
+    case "basePrice":
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      state.basePrice = Number(text);
+      state.step = "quantity";
+      bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      break;
+
+    case "quantity":
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      state.quantity = Number(text);
+      state.amount = state.basePrice * state.quantity;
       state.step = "desc";
-      bot.sendMessage(chatId, "📝 توضیحات (اختیاری):");
+      bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
       break;
+
     case "desc":
       state.desc = text || "-";
       saveTransaction(chatId, state);
+      delete userState[chatId];
       break;
   }
 }
 
-function saveTransaction(chatId, state) {
+// 💾 ذخیره تراکنش
+function saveTransaction(chatId, record) {
   const userFile = `${dataDir}/data_${chatId}.json`;
   let transactions = [];
-  if (fs.existsSync(userFile)) {
+  if (fs.existsSync(userFile))
     transactions = JSON.parse(fs.readFileSync(userFile));
-  }
 
-  const record = {
-    type: state.type,
-    name: state.name,
-    price: Number(state.price),
-    weight: Number(state.weight),
-    desc: state.desc,
-    date: new Date().toLocaleString("fa-IR"),
+  const entry = {
+    ...record,
+    date: new Date().toLocaleString("fa-IR", { timeZone: "Asia/Tehran" }),
   };
-
-  transactions.push(record);
+  transactions.push(entry);
   fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
-  bot.sendMessage(
-    chatId,
-    `✅ تراکنش ${
-      state.type === "buy" ? "خرید" : "فروش"
-    } ثبت شد.\n💰 مبلغ: ${record.price.toLocaleString("fa-IR")} تومان`
-  );
+  const filePath = `${exportDir}/invoice_${chatId}_${Date.now()}.png`;
+  createInvoiceImage(entry, filePath, () => {
+    bot.sendPhoto(chatId, filePath, {
+      caption: `✅ تراکنش ${entry.type === "buy" ? "خرید" : "فروش"} ثبت شد.`,
+    });
+  });
 
-  showSummary(chatId);
-  delete userState[chatId];
+  setTimeout(() => sendMainMenu(chatId), 1000);
 }
 
-function showSummary(chatId) {
-  const userFile = `${dataDir}/data_${chatId}.json`;
-  if (!fs.existsSync(userFile)) {
-    return bot.sendMessage(chatId, "❗ هنوز تراکنشی ثبت نکرده‌اید.");
+// 📄 ساخت تصویر فاکتور
+function createInvoiceImage(entry, outputPath, callback) {
+  const width = 600;
+  const height = 560;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#fffcf8";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "#d4af37";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(10, 10, width - 20, height - 20);
+
+  ctx.fillStyle = "#d4af37";
+  ctx.font = "bold 32px Vazirmatn";
+  ctx.fillText("گالری یامـــور", 200, 80);
+  ctx.textAlign = "right";
+
+  const startX = width - 40;
+  let startY = 120;
+  const lineHeight = 40;
+
+  ctx.fillStyle = "#333";
+  ctx.font = "20px Vazirmatn";
+  ctx.fillText(`تاریخ: ${entry.date}`, startX, startY);
+  startY += lineHeight;
+  ctx.fillText(
+    `نوع تراکنش: ${entry.type === "buy" ? "خرید" : "فروش"}`,
+    startX,
+    startY
+  );
+  startY += lineHeight;
+  ctx.fillText(`نام: ${entry.name}`, startX, startY);
+  startY += lineHeight;
+  ctx.fillText(`نوع کالا: ${entry.itemType}`, startX, startY);
+  startY += lineHeight;
+
+  if (entry.itemType === "طلا") {
+    ctx.fillText(
+      `قیمت مثقال: ${entry.priceMithqal.toLocaleString("fa-IR")} تومان`,
+      startX,
+      startY
+    );
+    startY += lineHeight;
+    ctx.fillText(
+      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} تومان`,
+      startX,
+      startY
+    );
+    startY += lineHeight;
+    ctx.fillText(`وزن: ${entry.weight.toLocaleString("fa-IR")} گرم`, startX, startY);
+  } else if (entry.itemType === "سکه") {
+    ctx.fillText(`نوع سکه: ${entry.coinType}`, startX, startY);
+    startY += lineHeight;
+    ctx.fillText(
+      `قیمت پایه: ${entry.basePrice.toLocaleString("fa-IR")} تومان`,
+      startX,
+      startY
+    );
+    startY += lineHeight;
+    ctx.fillText(`تعداد: ${entry.quantity}`, startX, startY);
+    startY += lineHeight;
+    ctx.fillText(`مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} تومان`, startX, startY);
+  } else if (entry.itemType === "ارز") {
+    ctx.fillText(`نوع ارز: ${entry.currencyType}`, startX, startY);
+    startY += lineHeight;
+    ctx.fillText(
+      `قیمت پایه: ${entry.basePrice.toLocaleString("fa-IR")} تومان`,
+      startX,
+      startY
+    );
+    startY += lineHeight;
+    ctx.fillText(`تعداد: ${entry.quantity}`, startX, startY);
+    startY += lineHeight;
+    ctx.fillText(`مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} تومان`, startX, startY);
   }
 
+  startY += lineHeight;
+  ctx.fillText(`توضیحات: ${entry.desc}`, startX, startY);
+
+  fs.writeFileSync(outputPath, canvas.toBuffer("image/png"));
+  callback();
+}
+
+// 📈 خلاصه وضعیت
+function showSummary(chatId) {
+  const userFile = `${dataDir}/data_${chatId}.json`;
+  if (!fs.existsSync(userFile))
+    return bot.sendMessage(chatId, "❗ هنوز تراکنشی ثبت نکرده‌اید.");
+
   const transactions = JSON.parse(fs.readFileSync(userFile));
+  if (!transactions.length)
+    return bot.sendMessage(chatId, "❗ داده‌ای برای نمایش وجود ندارد.");
 
   const totalBuy = transactions
     .filter((t) => t.type === "buy")
-    .reduce((sum, t) => sum + Number(t.price || 0), 0);
-
+    .reduce((sum, t) => sum + t.amount, 0);
   const totalSell = transactions
     .filter((t) => t.type === "sell")
-    .reduce((sum, t) => sum + Number(t.price || 0), 0);
+    .reduce((sum, t) => sum + t.amount, 0);
 
-  const profit = totalSell - totalBuy;
-
-  const message = `
+  const msg = `
 📊 خلاصه وضعیت:
 -------------------------
 🟢 مجموع خرید: ${totalBuy.toLocaleString("fa-IR")} تومان
 🔴 مجموع فروش: ${totalSell.toLocaleString("fa-IR")} تومان
-💎 سود / زیان خالص: ${profit.toLocaleString("fa-IR")} تومان
 -------------------------
 📅 تعداد تراکنش‌ها: ${transactions.length}
 `;
-  bot.sendMessage(chatId, message);
+  bot.sendMessage(chatId, msg);
 }
 
-function exportCSV(chatId) {
+// 📤 خروجی اکسل
+function exportExcel(chatId) {
   const userFile = `${dataDir}/data_${chatId}.json`;
-  if (!fs.existsSync(userFile)) {
+  if (!fs.existsSync(userFile))
     return bot.sendMessage(chatId, "❗ هنوز تراکنشی ثبت نکرده‌اید.");
-  }
 
   const transactions = JSON.parse(fs.readFileSync(userFile));
-  if (!transactions.length) {
+  if (!transactions.length)
     return bot.sendMessage(chatId, "❗ داده‌ای برای خروجی وجود ندارد.");
-  }
 
-  const csv = new Parser({
-    fields: ["type", "name", "price", "weight", "desc", "date"],
-  }).parse(
-    transactions.map((t) => ({
-      ...t,
-      price: `${Number(t.price).toLocaleString("fa-IR")} تومان`,
-      weight: `${Number(t.weight).toLocaleString("fa-IR")} گرم`,
-    }))
-  );
+  const formattedData = transactions.map((t) => ({
+    "نوع تراکنش": t.type === "buy" ? "خرید" : "فروش",
+    "نوع کالا": t.itemType,
+    "نام خریدار/فروشنده": t.name,
+    جزئیات:
+      t.itemType === "طلا"
+        ? `نام: ${t.name}`
+        : t.itemType === "سکه"
+        ? `نام: ${t.name}, نوع سکه: ${t.coinType}`
+        : `نام: ${t.name}, نوع ارز: ${t.currencyType}`,
+    "قیمت پایه / مثقال": (t.priceMithqal || t.basePrice)?.toLocaleString("fa-IR"),
+    "تعداد / وزن": (t.quantity || t.weight)?.toLocaleString("fa-IR"),
+    "مبلغ کل (تومان)": t.amount.toLocaleString("fa-IR"),
+    توضیحات: t.desc,
+    تاریخ: t.date,
+  }));
 
-  const filePath = `${exportDir}/transactions_${chatId}_${Date.now()}.csv`;
-  fs.writeFileSync(filePath, csv, "utf8");
+  const worksheet = XLSX.utils.json_to_sheet(formattedData);
+  const colsWidth = Object.keys(formattedData[0]).map(() => ({ wch: 25 }));
+  worksheet["!cols"] = colsWidth;
 
-  bot
-    .sendDocument(chatId, filePath, {
-      caption: "📄 فایل خروجی تراکنش‌ها (CSV)",
-    })
-    .catch((err) => {
-      console.error("❌ Error sending CSV:", err);
-      bot.sendMessage(chatId, "⚠️ خطایی در ارسال فایل رخ داد.");
-    });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "تراکنش‌ها");
+
+  const filePath = `${exportDir}/transactions_${chatId}_${Date.now()}.xlsx`;
+  XLSX.writeFile(workbook, filePath);
+  bot.sendDocument(chatId, filePath);
 }
+
+// ✅ دستور تایید ادمین
+bot.onText(/\/approve (.+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  if (chatId !== ADMIN_CHAT_ID)
+    return bot.sendMessage(chatId, "⛔️ فقط ادمین مجاز به این دستور است.");
+
+  const targetChatId = parseInt(match[1]);
+  const users = JSON.parse(fs.readFileSync(usersFile));
+  const user = users.find((u) => u.chatId === targetChatId);
+
+  if (!user) return bot.sendMessage(chatId, "❌ کاربر یافت نشد.");
+
+  const approvedUntil = new Date();
+  approvedUntil.setDate(approvedUntil.getDate() + APPROVAL_DURATION_DAYS);
+
+  user.status = "approved";
+  user.approvedUntil = approvedUntil.toISOString();
+  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+
+  bot.sendMessage(targetChatId, "✅ دسترسی شما برای ۳۰ روز فعال شد.");
+  bot.sendMessage(
+    chatId,
+    `✅ کاربر ${user.name} تا ${approvedUntil.toLocaleDateString("fa-IR")} فعال شد.`
+  );
+});
