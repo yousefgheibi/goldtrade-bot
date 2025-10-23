@@ -65,18 +65,7 @@ export function exportUsers(chatId) {
 
   const excelPath = `./exports/users_${Date.now()}.xlsx`;
   XLSX.writeFile(workbook, excelPath);
-
-  const zip = new AdmZip();
-  zip.addLocalFile(excelPath);
-  const zipPath = `./exports/users_export_${Date.now()}.zip`;
-  zip.writeZip(zipPath);
-
-  bot.sendDocument(chatId, zipPath);
-
-  setTimeout(() => {
-    fs.unlinkSync(excelPath);
-    fs.unlinkSync(zipPath);
-  }, 5000);
+  bot.sendDocument(chatId, excelPath);
 }
 
 export function exportAllData(chatId) {
