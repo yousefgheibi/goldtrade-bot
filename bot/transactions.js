@@ -17,7 +17,10 @@ export function handleMessage(msg) {
   const user = users.find((u) => u.chatId === chatId);
 
   if (!user)
-    return bot.sendMessage(chatId, "⚠️ لطفاً ابتدا دستور /start را ارسال کنید.");
+    return bot.sendMessage(
+      chatId,
+      "⚠️ لطفاً ابتدا دستور /start را ارسال کنید."
+    );
 
   if (user.status === "pending")
     return bot.sendMessage(chatId, "⏳ درخواست شما در انتظار تأیید ادمین است.");
@@ -51,10 +54,16 @@ export function handleMessage(msg) {
       break;
 
     case "ثبت موجودی":
-      userState[chatId] = { step: "setBalance" };
+      const CURRENCIES = ["تومان", "دلار", "یورو", "لیر"];
+      userState[chatId] = {
+        step: "setBalance",
+        currencies: CURRENCIES,
+        index: 0,
+        balances: {},
+      };
       bot.sendMessage(
         chatId,
-        "💰 لطفاً موجودی خود را به این صورت وارد کنید:\n\nمثلاً:\nتومان=5000000\nدلار=200\nیورو=50\nلیر=0"
+        `💰 مقدار ${CURRENCIES[0]} را وارد کنید.\n(فقط عدد — اگر صفر است یا می‌خواهید رد کنید، عدد 0 وارد کنید)\nبرای لغو، بنویسید: /cancel`
       );
       break;
 
@@ -94,7 +103,10 @@ function handleInput(chatId, text) {
 
     case "itemType":
       if (!["طلا", "سکه", "ارز"].includes(text))
-        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید.");
+        return bot.sendMessage(
+          chatId,
+          "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید."
+        );
 
       state.itemType = text;
 
@@ -134,7 +146,9 @@ function handleInput(chatId, text) {
       state.amount = Number(text);
 
       if (state.itemType === "طلا") {
-        state.weight = parseFloat(((state.amount / state.priceMithqal) * 4.3318).toFixed(3));
+        state.weight = parseFloat(
+          ((state.amount / state.priceMithqal) * 4.3318).toFixed(3)
+        );
         state.step = "desc";
         bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
       } else {
@@ -177,17 +191,63 @@ function handleInput(chatId, text) {
       break;
 
     case "setBalance":
-      const balances = {};
-      text.split("\n").forEach((line) => {
-        const [currency, value] = line.split("=");
-        if (currency && value && !isNaN(value.trim()))
-          balances[currency.trim()] = parseFloat(value.trim());
-      });
+      if (text === "/cancel") {
+        delete userState[chatId];
+        bot.sendMessage(chatId, "❎ عملیات ثبت موجودی لغو شد.");
+        return;
+      }
 
-      const file = `${DATA_DIR}/balance_${chatId}.json`;
-      fs.writeFileSync(file, JSON.stringify(balances, null, 2));
-      bot.sendMessage(chatId, "✅ موجودی ثبت شد.");
-      delete userState[chatId];
+      const curState = userState[chatId];
+      const currencies = curState.currencies || [
+        "تومان",
+        "دلار",
+        "یورو",
+        "لیر",
+      ];
+      const idx = curState.index ?? 0;
+      const currentCurrency = currencies[idx];
+
+      const cleaned = text.replace(/,/g, "").trim();
+      if (cleaned === "") {
+        return bot.sendMessage(
+          chatId,
+          "❌ لطفاً یک عدد وارد کنید یا /cancel برای لغو."
+        );
+      }
+      const num = Number(cleaned);
+      if (isNaN(num)) {
+        return bot.sendMessage(
+          chatId,
+          "❌ لطفاً فقط عدد وارد کنید. مثلاً: 5000000"
+        );
+      }
+
+      curState.balances[currentCurrency] = num;
+      curState.index = idx + 1;
+
+      if (curState.index < currencies.length) {
+        const nextCurrency = currencies[curState.index];
+        bot.sendMessage(
+          chatId,
+          `💰 مقدار ${nextCurrency} را وارد کنید.\n(فقط عدد — اگر صفر است، 0 وارد کنید)\nبرای لغو، /cancel`
+        );
+      } else {
+        const outFile = `${DATA_DIR}/balance_${chatId}.json`;
+        try {
+          fs.writeFileSync(outFile, JSON.stringify(curState.balances, null, 2));
+          bot.sendMessage(
+            chatId,
+            "✅ موجودی‌ها با موفقیت ثبت شد:\n" +
+              Object.entries(curState.balances)
+                .map(([k, v]) => `• ${k}: ${v.toLocaleString("fa-IR")}`)
+                .join("\n")
+          );
+        } catch (err) {
+          console.error("write balance error:", err);
+          bot.sendMessage(chatId, "⚠️ خطا در ذخیره موجودی. دوباره تلاش کنید.");
+        }
+        delete userState[chatId];
+      }
       break;
   }
 }
@@ -205,7 +265,6 @@ function saveTransaction(chatId, record) {
   transactions.push(entry);
   fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
-  // اطمینان از وجود پوشه exports
   if (!fs.existsSync("./exports")) fs.mkdirSync("./exports");
 
   const filePath = `./exports/invoice_${chatId}_${Date.now()}.png`;
@@ -234,6 +293,7 @@ function showSummary(chatId) {
   if (!transactions.length)
     return bot.sendMessage(chatId, "ℹ️ هنوز هیچ تراکنشی ثبت نشده است.");
 
+  // محاسبه مجموع خرید/فروش کلی (به تومان)
   const totalBuy = transactions
     .filter((t) => t.type === "buy")
     .reduce((sum, t) => sum + t.amount, 0);
@@ -242,6 +302,7 @@ function showSummary(chatId) {
     .filter((t) => t.type === "sell")
     .reduce((sum, t) => sum + t.amount, 0);
 
+  // محاسبه تراکنش‌های امروز
   const today = new Date().toLocaleDateString("fa-IR");
   const todayTx = transactions.filter((t) => t.date.startsWith(today));
 
@@ -255,16 +316,41 @@ function showSummary(chatId) {
 
   const dailyProfit = dailySell - dailyBuy;
 
-  let balanceMsg = "\n💰 موجودی فعلی:\n";
-  for (const [cur, val] of Object.entries(balances)) {
-    balanceMsg += `• ${cur}: ${val.toLocaleString("fa-IR")}\n`;
+  // محاسبه سود/زیان برای هر ارز به تفکیک
+  const currencyStats = {}; // { "دلار": { buy: 0, sell: 0 } }
+  for (const tx of transactions) {
+    const cur = tx.currency || "تومان";
+    if (!currencyStats[cur]) currencyStats[cur] = { buy: 0, sell: 0 };
+    currencyStats[cur][tx.type] += tx.amount;
   }
 
+  // ساخت پیام موجودی با تفکیک مثبت/منفی
+  let balanceMsg = "\n💰 موجودی فعلی (تراز هر ارز):\n";
+  for (const [cur, val] of Object.entries(balances)) {
+    const stats = currencyStats[cur] || { buy: 0, sell: 0 };
+    const diff = val + (stats.sell - stats.buy); // تراز نهایی واقعی
+
+    let sign = diff > 0 ? "🟢" : diff < 0 ? "🔴" : "⚪️";
+    balanceMsg += `${sign} ${cur}: ${diff.toLocaleString("fa-IR")}\n`;
+  }
+
+  // محاسبه طلا و سکه به تومان
+  const goldValue = balances["طلا"] || 0;
+  const coinValue = balances["سکه"] || 0;
+  const tomanBase = (balances["تومان"] || 0) + goldValue + coinValue;
+
+  balanceMsg += `\n💎 مجموع تومانی (با طلا و سکه): ${tomanBase.toLocaleString(
+    "fa-IR"
+  )} تومان`;
+
+  // پیام نهایی
   const msg = `📊 خلاصه وضعیت:\n-------------------------\n🟢 مجموع خرید: ${totalBuy.toLocaleString(
     "fa-IR"
   )} تومان\n🔴 مجموع فروش: ${totalSell.toLocaleString(
     "fa-IR"
-  )} تومان\n-------------------------\n📆 تراکنش‌های امروز: ${todayTx.length}\n🧾 تراز امروز: ${dailyProfit.toLocaleString(
+  )} تومان\n-------------------------\n📆 تراکنش‌های امروز: ${
+    todayTx.length
+  }\n🧾 تراز امروز: ${dailyProfit.toLocaleString(
     "fa-IR"
   )} تومان\n-------------------------${balanceMsg}`;
 
