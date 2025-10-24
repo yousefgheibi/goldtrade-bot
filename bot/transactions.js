@@ -3,7 +3,7 @@ import { bot } from "./bot.js";
 import { DATA_DIR, USERS_FILE } from "../config.js";
 import { sendMainMenu } from "./menu.js";
 import { createInvoiceImage } from "./invoice.js";
-import { exportExcel } from "./exports.js";
+import { exportExcel, exportUsers, exportAllData } from "./exports.js";
 
 export const userState = {};
 
