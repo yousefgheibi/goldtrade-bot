@@ -293,16 +293,7 @@ function showSummary(chatId) {
   if (!transactions.length)
     return bot.sendMessage(chatId, "ℹ️ هنوز هیچ تراکنشی ثبت نشده است.");
 
-  // محاسبه مجموع خرید/فروش کلی (به تومان)
-  const totalBuy = transactions
-    .filter((t) => t.type === "buy")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const totalSell = transactions
-    .filter((t) => t.type === "sell")
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  // محاسبه تراکنش‌های امروز
+  // تراکنش‌های امروز
   const today = new Date().toLocaleDateString("fa-IR");
   const todayTx = transactions.filter((t) => t.date.startsWith(today));
 
@@ -316,39 +307,40 @@ function showSummary(chatId) {
 
   const dailyProfit = dailySell - dailyBuy;
 
-  // محاسبه سود/زیان برای هر ارز به تفکیک
   const currencyStats = {}; // { "دلار": { buy: 0, sell: 0 } }
   for (const tx of transactions) {
-    const cur = tx.currency || "تومان";
+    const cur = tx.currencyType || tx.itemType || "تومان";
     if (!currencyStats[cur]) currencyStats[cur] = { buy: 0, sell: 0 };
     currencyStats[cur][tx.type] += tx.amount;
   }
 
-  // ساخت پیام موجودی با تفکیک مثبت/منفی
-  let balanceMsg = "\n💰 موجودی فعلی (تراز هر ارز):\n";
+  let balanceMsg = "\n💰 تراز دارایی‌ها:\n";
   for (const [cur, val] of Object.entries(balances)) {
     const stats = currencyStats[cur] || { buy: 0, sell: 0 };
-    const diff = val + (stats.sell - stats.buy); // تراز نهایی واقعی
 
-    let sign = diff > 0 ? "🟢" : diff < 0 ? "🔴" : "⚪️";
-    balanceMsg += `${sign} ${cur}: ${diff.toLocaleString("fa-IR")}\n`;
+    const finalValue = val + (stats.buy - stats.sell);
+
+    let sign = finalValue > val ? "🟢" : finalValue < val ? "🔴" : "⚪️";
+    const diff = finalValue - val;
+    const diffText =
+      diff === 0
+        ? ""
+        : ` (${diff > 0 ? "+" : ""}${diff.toLocaleString("fa-IR")})`;
+
+    balanceMsg += `${sign} ${cur}: ${finalValue.toLocaleString(
+      "fa-IR"
+    )}${diffText}\n`;
   }
 
-  // محاسبه طلا و سکه به تومان
   const goldValue = balances["طلا"] || 0;
   const coinValue = balances["سکه"] || 0;
   const tomanBase = (balances["تومان"] || 0) + goldValue + coinValue;
 
-  balanceMsg += `\n💎 مجموع تومانی (با طلا و سکه): ${tomanBase.toLocaleString(
+  balanceMsg += `\n💎 مجموع دارایی به تومان (با طلا و سکه): ${tomanBase.toLocaleString(
     "fa-IR"
   )} تومان`;
 
-  // پیام نهایی
-  const msg = `📊 خلاصه وضعیت:\n-------------------------\n🟢 مجموع خرید: ${totalBuy.toLocaleString(
-    "fa-IR"
-  )} تومان\n🔴 مجموع فروش: ${totalSell.toLocaleString(
-    "fa-IR"
-  )} تومان\n-------------------------\n📆 تراکنش‌های امروز: ${
+  const msg = `📊 خلاصه وضعیت:\n-------------------------\n📆 تراکنش‌های امروز: ${
     todayTx.length
   }\n🧾 تراز امروز: ${dailyProfit.toLocaleString(
     "fa-IR"
