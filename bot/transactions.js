@@ -51,6 +51,14 @@ export function handleMessage(msg) {
       userState[chatId] = { type: "sell", step: "name" };
       bot.sendMessage(chatId, "👤 لطفاً نام فروشنده را وارد کنید:");
       break;
+    case "💰 ثبت موجودی":
+      userState[chatId] = { step: "setBalance" };
+      bot.sendMessage(
+        chatId,
+        "💰 لطفاً موجودی خود را به این صورت وارد کنید:\n\nمثلاً:\nتومان=5000000\nدلار=200\nیورو=50\nلیر=0"
+      );
+      break;
+
     case "📈 خلاصه وضعیت":
       showSummary(chatId);
       break;
@@ -159,6 +167,18 @@ function handleInput(chatId, text) {
       saveTransaction(chatId, state);
       delete userState[chatId];
       break;
+    case "setBalance":
+      const balances = {};
+      text.split("\n").forEach((line) => {
+        const [currency, value] = line.split("=");
+        if (currency && value)
+          balances[currency.trim()] = parseFloat(value.trim());
+      });
+      const file = `${DATA_DIR}/balance_${chatId}.json`;
+      fs.writeFileSync(file, JSON.stringify(balances, null, 2));
+      bot.sendMessage(chatId, "✅ موجودی ثبت شد.");
+      delete userState[chatId];
+      break;
   }
 }
 
@@ -186,19 +206,29 @@ function saveTransaction(chatId, record) {
 }
 
 function showSummary(chatId) {
-  const userFile = `${DATA_DIR}/data_${chatId}.json`;
-  if (!fs.existsSync(userFile))
-    return bot.sendMessage(chatId, "❗ هنوز تراکنشی ثبت نکرده‌اید.");
-  const transactions = JSON.parse(fs.readFileSync(userFile));
-  if (!transactions.length)
-    return bot.sendMessage(chatId, "❗ داده‌ای برای نمایش وجود ندارد.");
+  // خواندن موجودی فعلی
+  const balanceFile = `${DATA_DIR}/balance_${chatId}.json`;
+  let balances = {};
+  if (fs.existsSync(balanceFile)) {
+    balances = JSON.parse(fs.readFileSync(balanceFile));
+  }
 
-  const totalBuy = transactions
+  // محاسبه سود/زیان روزانه
+  const today = new Date().toLocaleDateString("fa-IR");
+  const todayTx = transactions.filter((t) => t.date.startsWith(today));
+  const dailyBuy = todayTx
     .filter((t) => t.type === "buy")
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalSell = transactions
+    .reduce((s, t) => s + t.amount, 0);
+  const dailySell = todayTx
     .filter((t) => t.type === "sell")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((s, t) => s + t.amount, 0);
+  const dailyProfit = dailySell - dailyBuy;
+
+  // نمایش
+  let balanceMsg = "\n💰 موجودی فعلی:\n";
+  for (const [cur, val] of Object.entries(balances)) {
+    balanceMsg += `• ${cur}: ${val.toLocaleString("fa-IR")}\n`;
+  }
 
   const msg = `📊 خلاصه وضعیت:\n-------------------------\n🟢 مجموع خرید: ${totalBuy.toLocaleString(
     "fa-IR"
@@ -206,6 +236,8 @@ function showSummary(chatId) {
     "fa-IR"
   )} تومان\n-------------------------\n📅 تعداد تراکنش‌ها: ${
     transactions.length
-  }`;
+  }\n-------------------------\n📆 تراز امروز: ${dailyProfit.toLocaleString(
+    "fa-IR"
+  )} تومان${balanceMsg}`;
   bot.sendMessage(chatId, msg);
 }

@@ -42,13 +42,13 @@ export function createInvoiceImage(entry, outputPath, callback) {
 
   if (entry.itemType === "طلا") {
     ctx.fillText(
-      `قیمت مثقال: ${entry.priceMithqal.toLocaleString("fa-IR")} تومان`,
+      `قیمت مثقال: ${entry.priceMithqal.toLocaleString("fa-IR")} میلیون تومان`,
       startX,
       startY
     );
     startY += lineHeight;
     ctx.fillText(
-      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} تومان`,
+      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} میلیون تومان`,
       startX,
       startY
     );
@@ -62,7 +62,7 @@ export function createInvoiceImage(entry, outputPath, callback) {
     ctx.fillText(`نوع سکه: ${entry.coinType}`, startX, startY);
     startY += lineHeight;
     ctx.fillText(
-      `قیمت پایه: ${entry.basePrice.toLocaleString("fa-IR")} تومان`,
+      `قیمت پایه: ${entry.basePrice.toLocaleString("fa-IR")} میلیون تومان`,
       startX,
       startY
     );
@@ -70,7 +70,7 @@ export function createInvoiceImage(entry, outputPath, callback) {
     ctx.fillText(`تعداد: ${entry.quantity}`, startX, startY);
     startY += lineHeight;
     ctx.fillText(
-      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} تومان`,
+      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} میلیون تومان`,
       startX,
       startY
     );
@@ -78,7 +78,7 @@ export function createInvoiceImage(entry, outputPath, callback) {
     ctx.fillText(`نوع ارز: ${entry.currencyType}`, startX, startY);
     startY += lineHeight;
     ctx.fillText(
-      `قیمت پایه: ${entry.basePrice.toLocaleString("fa-IR")} تومان`,
+      `قیمت پایه: ${entry.basePrice.toLocaleString("fa-IR")} میلیون تومان`,
       startX,
       startY
     );
@@ -86,7 +86,7 @@ export function createInvoiceImage(entry, outputPath, callback) {
     ctx.fillText(`تعداد: ${entry.quantity}`, startX, startY);
     startY += lineHeight;
     ctx.fillText(
-      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} تومان`,
+      `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} میلیون تومان`,
       startX,
       startY
     );
