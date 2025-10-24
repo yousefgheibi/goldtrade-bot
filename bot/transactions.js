@@ -17,10 +17,7 @@ export function handleMessage(msg) {
   const user = users.find((u) => u.chatId === chatId);
 
   if (!user)
-    return bot.sendMessage(
-      chatId,
-      "⚠️ لطفاً ابتدا دستور /start را ارسال کنید."
-    );
+    return bot.sendMessage(chatId, "⚠️ لطفاً ابتدا دستور /start را ارسال کنید.");
 
   if (user.status === "pending")
     return bot.sendMessage(chatId, "⏳ درخواست شما در انتظار تأیید ادمین است.");
@@ -47,11 +44,13 @@ export function handleMessage(msg) {
       userState[chatId] = { type: "buy", step: "name" };
       bot.sendMessage(chatId, "👤 لطفاً نام خریدار را وارد کنید:");
       break;
+
     case "🔴 ثبت فروش":
       userState[chatId] = { type: "sell", step: "name" };
       bot.sendMessage(chatId, "👤 لطفاً نام فروشنده را وارد کنید:");
       break;
-    case "💰 ثبت موجودی":
+
+    case "ثبت موجودی":
       userState[chatId] = { step: "setBalance" };
       bot.sendMessage(
         chatId,
@@ -59,15 +58,18 @@ export function handleMessage(msg) {
       );
       break;
 
-    case "📈 خلاصه وضعیت":
+    case "خلاصه وضعیت":
       showSummary(chatId);
       break;
-    case "📤 خروجی فایل":
+
+    case "خروجی فایل":
       exportExcel(chatId);
       break;
+
     case "کاربران":
       exportUsers(chatId);
       break;
+
     case "بکاپ":
       exportAllData(chatId);
       break;
@@ -92,11 +94,10 @@ function handleInput(chatId, text) {
 
     case "itemType":
       if (!["طلا", "سکه", "ارز"].includes(text))
-        return bot.sendMessage(
-          chatId,
-          "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید."
-        );
+        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید.");
+
       state.itemType = text;
+
       if (text === "طلا") {
         state.step = "priceMithqal";
         bot.sendMessage(chatId, "💰 لطفاً قیمت روز مثقال طلا را وارد کنید:");
@@ -127,34 +128,40 @@ function handleInput(chatId, text) {
       state.step = "amount";
       bot.sendMessage(chatId, "💵 مبلغ کل خرید یا فروش را وارد کنید:");
       break;
+
     case "amount":
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
       state.amount = Number(text);
+
       if (state.itemType === "طلا") {
-        state.weight = parseFloat(
-          ((state.amount / state.priceMithqal) * 4.3318).toFixed(3)
-        );
+        state.weight = parseFloat(((state.amount / state.priceMithqal) * 4.3318).toFixed(3));
         state.step = "desc";
         bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
-      } else state.step = "quantity";
-      bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      } else {
+        state.step = "quantity";
+        bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      }
       break;
+
     case "coinType":
       state.coinType = text;
       state.step = "basePrice";
       bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
       break;
+
     case "currencyType":
       state.currencyType = text;
       state.step = "basePrice";
       bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
       break;
+
     case "basePrice":
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
       state.basePrice = Number(text);
       state.step = "quantity";
       bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
       break;
+
     case "quantity":
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
       state.quantity = Number(text);
@@ -162,18 +169,21 @@ function handleInput(chatId, text) {
       state.step = "desc";
       bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
       break;
+
     case "desc":
       state.desc = text || "-";
       saveTransaction(chatId, state);
       delete userState[chatId];
       break;
+
     case "setBalance":
       const balances = {};
       text.split("\n").forEach((line) => {
         const [currency, value] = line.split("=");
-        if (currency && value)
+        if (currency && value && !isNaN(value.trim()))
           balances[currency.trim()] = parseFloat(value.trim());
       });
+
       const file = `${DATA_DIR}/balance_${chatId}.json`;
       fs.writeFileSync(file, JSON.stringify(balances, null, 2));
       bot.sendMessage(chatId, "✅ موجودی ثبت شد.");
@@ -195,6 +205,9 @@ function saveTransaction(chatId, record) {
   transactions.push(entry);
   fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
 
+  // اطمینان از وجود پوشه exports
+  if (!fs.existsSync("./exports")) fs.mkdirSync("./exports");
+
   const filePath = `./exports/invoice_${chatId}_${Date.now()}.png`;
   createInvoiceImage(entry, filePath, () => {
     bot.sendPhoto(chatId, filePath, {
@@ -206,25 +219,42 @@ function saveTransaction(chatId, record) {
 }
 
 function showSummary(chatId) {
-  // خواندن موجودی فعلی
   const balanceFile = `${DATA_DIR}/balance_${chatId}.json`;
-  let balances = {};
-  if (fs.existsSync(balanceFile)) {
-    balances = JSON.parse(fs.readFileSync(balanceFile));
-  }
+  const dataFile = `${DATA_DIR}/data_${chatId}.json`;
 
-  // محاسبه سود/زیان روزانه
+  let balances = {};
+  let transactions = [];
+
+  if (fs.existsSync(balanceFile))
+    balances = JSON.parse(fs.readFileSync(balanceFile));
+
+  if (fs.existsSync(dataFile))
+    transactions = JSON.parse(fs.readFileSync(dataFile));
+
+  if (!transactions.length)
+    return bot.sendMessage(chatId, "ℹ️ هنوز هیچ تراکنشی ثبت نشده است.");
+
+  const totalBuy = transactions
+    .filter((t) => t.type === "buy")
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalSell = transactions
+    .filter((t) => t.type === "sell")
+    .reduce((sum, t) => sum + t.amount, 0);
+
   const today = new Date().toLocaleDateString("fa-IR");
   const todayTx = transactions.filter((t) => t.date.startsWith(today));
+
   const dailyBuy = todayTx
     .filter((t) => t.type === "buy")
     .reduce((s, t) => s + t.amount, 0);
+
   const dailySell = todayTx
     .filter((t) => t.type === "sell")
     .reduce((s, t) => s + t.amount, 0);
+
   const dailyProfit = dailySell - dailyBuy;
 
-  // نمایش
   let balanceMsg = "\n💰 موجودی فعلی:\n";
   for (const [cur, val] of Object.entries(balances)) {
     balanceMsg += `• ${cur}: ${val.toLocaleString("fa-IR")}\n`;
@@ -234,10 +264,9 @@ function showSummary(chatId) {
     "fa-IR"
   )} تومان\n🔴 مجموع فروش: ${totalSell.toLocaleString(
     "fa-IR"
-  )} تومان\n-------------------------\n📅 تعداد تراکنش‌ها: ${
-    transactions.length
-  }\n-------------------------\n📆 تراز امروز: ${dailyProfit.toLocaleString(
+  )} تومان\n-------------------------\n📆 تراکنش‌های امروز: ${todayTx.length}\n🧾 تراز امروز: ${dailyProfit.toLocaleString(
     "fa-IR"
-  )} تومان${balanceMsg}`;
+  )} تومان\n-------------------------${balanceMsg}`;
+
   bot.sendMessage(chatId, msg);
 }
