@@ -33,9 +33,7 @@ export function handleApprove(msg, match) {
 
   bot.sendMessage(chatId, `✅ کاربر ${user.name} تأیید شد.`);
   bot.sendMessage(
-    targetChatId,
-    "✅ دسترسی شما تا ۳۰ روز آینده فعال شد. حالا می‌توانید از ربات استفاده کنید."
-  );
+    targetChatId, `✅ دسترسی شما تا ۳۰ روز آینده فعال شد. حالا می‌توانید از ربات استفاده کنید. n/start)`)
 }
 
 function registerUser(chatId, name) {
