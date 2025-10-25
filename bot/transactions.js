@@ -310,13 +310,6 @@ function showSummary(chatId) {
   const start = today.startOf("day");
   const end = today.endOf("day");
 
-  function getTransactionsInRange(transactions, from, to) {
-    return transactions.filter((t) => {
-      const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
-      return txDate >= from && txDate <= to;
-    });
-  }
-
   const todayTx = getTransactionsInRange(transactions, start, end);
 
   const dailyProfit = calculateProfit(todayTx);
@@ -336,7 +329,7 @@ function showSummary(chatId) {
 
 function getTransactionsInRange(transactions, from, to) {
   return transactions.filter((t) => {
-    const txDate = new Date(t.date);
+    const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
     return txDate >= from && txDate <= to;
   });
 }
