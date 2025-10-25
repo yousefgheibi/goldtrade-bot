@@ -290,82 +290,24 @@ function showSummary(chatId) {
   if (fs.existsSync(dataFile))
     transactions = JSON.parse(fs.readFileSync(dataFile));
 
-  if (!transactions.length)
-    return bot.sendMessage(chatId, "ℹ️ هنوز هیچ تراکنشی ثبت نشده است.");
-
-  // 🗓️ تاریخ‌های مرجع
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
 
-  // فیلتر تراکنش‌ها در بازه مشخص
-  const getTransactionsInRange = (from, to) =>
-    transactions.filter((t) => {
-      const txDate = new Date(t.date);
-      return txDate >= from && txDate <= to;
-    });
+  const todayTx = getTransactionsInRange(transactions, today, today);
+  const yesterdayTx = getTransactionsInRange(transactions, yesterday, yesterday);
+  const weekTx = getTransactionsInRange(transactions, weekAgo, today);
 
-  // محاسبه تراز
-  const getProfit = (txList) => {
-    const buy = txList
-      .filter((t) => t.type === "buy")
-      .reduce((s, t) => s + t.amount, 0);
-    const sell = txList
-      .filter((t) => t.type === "sell")
-      .reduce((s, t) => s + t.amount, 0);
-    return sell - buy;
-  };
+  const dailyProfit = calculateProfit(todayTx);
+  const yesterdayProfit = calculateProfit(yesterdayTx);
+  const weeklyProfit = calculateProfit(weekTx);
 
-  const todayTx = getTransactionsInRange(today, today);
-  const yesterdayTx = getTransactionsInRange(yesterday, yesterday);
-  const weekTx = getTransactionsInRange(weekAgo, today);
+  const currencyStats = calculateCurrencyStats(transactions);
 
-  const dailyProfit = getProfit(todayTx);
-  const yesterdayProfit = getProfit(yesterdayTx);
-  const weeklyProfit = getProfit(weekTx);
+  const balanceMsg = buildBalanceMessage(currencyStats, balances);
 
-  // 💱 آمار خرید/فروش برای هر ارز
-  const currencyStats = {};
-  for (const tx of transactions) {
-    const cur = tx.currencyType || tx.itemType || "تومان";
-    if (!currencyStats[cur]) currencyStats[cur] = { buy: 0, sell: 0 };
-    currencyStats[cur][tx.type] += tx.amount;
-  }
-
-  // 💎 محاسبه طلا و سکه به تومان
-  const goldUnitPrice = balances["طلا_price"] || 0;
-  const coinUnitPrice = balances["سکه_price"] || 0;
-
-  const goldCount =
-    (currencyStats["طلا"]?.buy || 0) - (currencyStats["طلا"]?.sell || 0);
-  const coinCount =
-    (currencyStats["سکه"]?.buy || 0) - (currencyStats["سکه"]?.sell || 0);
-
-  const goldValue = goldCount * goldUnitPrice;
-  const coinValue = coinCount * coinUnitPrice;
-  const totalToman = goldValue + coinValue;
-
-  // 💰 نمایش تراز دارایی‌ها (فقط ارزها)
-  let balanceMsg = "\n💰 تراز دارایی‌ها:\n";
-  for (const [cur, stats] of Object.entries(currencyStats)) {
-    if (cur === "طلا" || cur === "سکه" || cur === "تومان") continue;
-
-    const remaining = stats.buy - stats.sell;
-    const sign = remaining > 0 ? "🟢" : remaining < 0 ? "🔴" : "⚪️";
-    balanceMsg += `${sign} ${cur}: ${remaining.toLocaleString(
-      "fa-IR"
-    )} (خرید ${stats.buy.toLocaleString(
-      "fa-IR"
-    )} / فروش ${stats.sell.toLocaleString("fa-IR")})\n`;
-  }
-
-  balanceMsg += `\n💵 مجموع تومانی (طلا و سکه): ${totalToman.toLocaleString(
-    "fa-IR"
-  )} تومان\n`;
-
-  // 🧾 پیام نهایی
   const msg = `📊 خلاصه وضعیت:
 -------------------------
 📆 تراکنش‌های امروز: ${todayTx.length}
@@ -375,4 +317,53 @@ function showSummary(chatId) {
 -------------------------${balanceMsg}`;
 
   bot.sendMessage(chatId, msg);
+}
+
+function getTransactionsInRange(transactions, from, to) {
+  return transactions.filter((t) => {
+    const txDate = new Date(t.date);
+    return txDate >= from && txDate <= to;
+  });
+}
+
+function calculateProfit(txList) {
+  const buy = txList.filter((t) => t.type === "buy").reduce((s, t) => s + t.amount, 0);
+  const sell = txList.filter((t) => t.type === "sell").reduce((s, t) => s + t.amount, 0);
+  return sell - buy;
+}
+
+function calculateCurrencyStats(transactions) {
+  const stats = {};
+  for (const tx of transactions) {
+    const cur = tx.currencyType || tx.itemType || "تومان";
+    if (!stats[cur]) stats[cur] = { buy: 0, sell: 0 };
+    stats[cur][tx.type] += tx.amount;
+  }
+  return stats;
+}
+
+function buildBalanceMessage(currencyStats, balances) {
+  const goldUnitPrice = balances["طلا_price"] || 0;
+  const coinUnitPrice = balances["سکه_price"] || 0;
+
+  const goldCount = (currencyStats["طلا"]?.buy || 0) - (currencyStats["طلا"]?.sell || 0);
+  const coinCount = (currencyStats["سکه"]?.buy || 0) - (currencyStats["سکه"]?.sell || 0);
+
+  const goldValue = goldCount * goldUnitPrice;
+  const coinValue = coinCount * coinUnitPrice;
+  const totalToman = goldValue + coinValue;
+
+  let msg = "\n💰 تراز دارایی‌ها:\n";
+  for (const [cur, stats] of Object.entries(currencyStats)) {
+    if (["طلا", "سکه", "تومان"].includes(cur)) continue;
+
+    const remaining = stats.buy - stats.sell;
+    const sign = remaining > 0 ? "🟢" : remaining < 0 ? "🔴" : "⚪️";
+    msg += `${sign} ${cur}: ${remaining.toLocaleString("fa-IR")} (خرید ${stats.buy.toLocaleString(
+      "fa-IR"
+    )} / فروش ${stats.sell.toLocaleString("fa-IR")})\n`;
+  }
+
+  msg += `\n💵 مجموع تومانی (طلا و سکه): ${totalToman.toLocaleString("fa-IR")} تومان\n`;
+  return msg;
 }
