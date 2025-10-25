@@ -103,7 +103,10 @@ function handleInput(chatId, text) {
 
     case "itemType":
       if (!["طلا", "سکه", "ارز"].includes(text))
-        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید.");
+        return bot.sendMessage(
+          chatId,
+          "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید."
+        );
 
       state.itemType = text;
 
@@ -143,7 +146,9 @@ function handleInput(chatId, text) {
       state.amount = Number(text);
 
       if (state.itemType === "طلا") {
-        state.weight = parseFloat(((state.amount / state.priceMithqal) * 4.3318).toFixed(3));
+        state.weight = parseFloat(
+          ((state.amount / state.priceMithqal) * 4.3318).toFixed(3)
+        );
         state.step = "desc";
         bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
       } else {
@@ -160,7 +165,7 @@ function handleInput(chatId, text) {
 
     case "currencyType":
       state.currencyType = text;
-      state.step = "quantity"; // 👈 ابتدا تعداد را بپرس
+      state.step = "quantity";
       bot.sendMessage(chatId, "🔢 لطفاً تعداد ارز را وارد کنید:");
       break;
 
@@ -168,14 +173,12 @@ function handleInput(chatId, text) {
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
       state.quantity = Number(text);
 
-      // 👇 اگر نوع آیتم ارز است، حالا قیمت پایه را بپرس
       if (state.itemType === "ارز") {
         state.step = "basePrice";
         bot.sendMessage(chatId, "💰 لطفاً قیمت پایه هر واحد ارز را وارد کنید:");
         return;
       }
 
-      // 👇 اگر نوع آیتم چیز دیگری بود (مثل سکه)
       if (state.itemType === "سکه") {
         state.amount = state.basePrice * state.quantity;
         state.step = "desc";
@@ -188,7 +191,6 @@ function handleInput(chatId, text) {
       state.basePrice = Number(text);
 
       if (state.itemType === "ارز") {
-        // 👇 حالا مبلغ کل رو محاسبه کن
         state.amount = state.basePrice * state.quantity;
         state.step = "desc";
         bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
@@ -212,17 +214,28 @@ function handleInput(chatId, text) {
       }
 
       const curState = userState[chatId];
-      const currencies = curState.currencies || ["تومان", "دلار", "یورو", "لیر"];
+      const currencies = curState.currencies || [
+        "تومان",
+        "دلار",
+        "یورو",
+        "لیر",
+      ];
       const idx = curState.index ?? 0;
       const currentCurrency = currencies[idx];
 
       const cleaned = text.replace(/,/g, "").trim();
       if (cleaned === "") {
-        return bot.sendMessage(chatId, "❌ لطفاً یک عدد وارد کنید یا /cancel برای لغو.");
+        return bot.sendMessage(
+          chatId,
+          "❌ لطفاً یک عدد وارد کنید یا /cancel برای لغو."
+        );
       }
       const num = Number(cleaned);
       if (isNaN(num)) {
-        return bot.sendMessage(chatId, "❌ لطفاً فقط عدد وارد کنید. مثلاً: 5000000");
+        return bot.sendMessage(
+          chatId,
+          "❌ لطفاً فقط عدد وارد کنید. مثلاً: 5000000"
+        );
       }
 
       curState.balances[currentCurrency] = num;
@@ -294,18 +307,13 @@ function showSummary(chatId) {
     transactions = JSON.parse(fs.readFileSync(dataFile));
 
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 7);
-
-  const todayTx = getTransactionsInRange(transactions, today, today);
-  const yesterdayTx = getTransactionsInRange(transactions, yesterday, yesterday);
-  const weekTx = getTransactionsInRange(transactions, weekAgo, today);
+  const todayTx = getTransactionsInRange(
+    transactions,
+    startOfDay(today),
+    endOfDay(today)
+  );
 
   const dailyProfit = calculateProfit(todayTx);
-  const yesterdayProfit = calculateProfit(yesterdayTx);
-  const weeklyProfit = calculateProfit(weekTx);
 
   const currencyStats = calculateCurrencyStats(transactions);
 
@@ -314,9 +322,7 @@ function showSummary(chatId) {
   const msg = `📊 خلاصه وضعیت:
 -------------------------
 📆 تراکنش‌های امروز: ${todayTx.length}
-🧾 تراز امروز: ${dailyProfit.toLocaleString("fa-IR")} تومان
-📆 تراز دیروز: ${yesterdayProfit.toLocaleString("fa-IR")} تومان
-📅 تراز هفتگی: ${weeklyProfit.toLocaleString("fa-IR")} تومان
+🧾 تراز مالی: ${dailyProfit.toLocaleString("fa-IR")} تومان
 -------------------------${balanceMsg}`;
 
   bot.sendMessage(chatId, msg);
@@ -330,8 +336,12 @@ function getTransactionsInRange(transactions, from, to) {
 }
 
 function calculateProfit(txList) {
-  const buy = txList.filter((t) => t.type === "buy").reduce((s, t) => s + t.amount, 0);
-  const sell = txList.filter((t) => t.type === "sell").reduce((s, t) => s + t.amount, 0);
+  const buy = txList
+    .filter((t) => t.type === "buy")
+    .reduce((s, t) => s + t.amount, 0);
+  const sell = txList
+    .filter((t) => t.type === "sell")
+    .reduce((s, t) => s + t.amount, 0);
   return sell - buy;
 }
 
@@ -339,45 +349,59 @@ function calculateCurrencyStats(transactions) {
   const stats = {};
   for (const tx of transactions) {
     const cur = tx.currencyType || tx.itemType || "تومان";
-    if (!stats[cur])
-      stats[cur] = { buy: 0, sell: 0, buyCount: 0, sellCount: 0 };
+    if (!stats[cur]) stats[cur] = { buyCount: 0, sellCount: 0 };
 
-    // 💰 مبلغ تراکنش (به تومان)
-    stats[cur][tx.type] += tx.amount;
-
-    // 🔢 تعداد واحد معامله‌شده
-    if (tx.count) stats[cur][`${tx.type}Count`] += tx.count;
+    const count = Number(tx.count) || 0;
+    if (tx.type === "buy") stats[cur].buyCount += count;
+    else if (tx.type === "sell") stats[cur].sellCount += count;
   }
+
   return stats;
 }
-
 function buildBalanceMessage(currencyStats, balances) {
-  const goldUnitPrice = balances["طلا_price"] || 0;
-  const coinUnitPrice = balances["سکه_price"] || 0;
-
-  const goldCount = (currencyStats["طلا"]?.buyCount || 0) - (currencyStats["طلا"]?.sellCount || 0);
-  const coinCount = (currencyStats["سکه"]?.buyCount || 0) - (currencyStats["سکه"]?.sellCount || 0);
-
-  const goldValue = goldCount * goldUnitPrice;
-  const coinValue = coinCount * coinUnitPrice;
-  const totalToman = goldValue + coinValue;
-
   let msg = "\n💰 تراز دارایی‌ها:\n";
+  const formatter = new Intl.NumberFormat("fa-IR");
 
-  // 🔸 همه ارزها (حتی آنهایی که موجودی‌شان صفر است)
-  const allCurrencies = Object.keys(currencyStats);
+  const allCurrencies = new Set([
+    ...Object.keys(currencyStats),
+    ...Object.keys(balances),
+  ]);
+
   for (const cur of allCurrencies) {
-    if (["طلا", "سکه", "تومان"].includes(cur)) continue;
+    const stats = currencyStats[cur] || { buyCount: 0, sellCount: 0 };
+    const startBalance = Number(balances[cur]) || 0;
 
-    const stats = currencyStats[cur];
-    const remaining = (stats.buyCount || 0) - (stats.sellCount || 0);
-    const sign = remaining > 0 ? "🟢" : remaining < 0 ? "🔴" : "⚪️";
+    if (cur === "طلا") {
+      const finalToman = startBalance + (stats.buyCount - stats.sellCount);
+      msg += `🏅 ${cur}: ${formatter.format(finalToman)} تومان\n`;
+      continue;
+    }
 
-    msg += `${sign} ${cur}: ${remaining.toLocaleString("fa-IR")} (خرید ${stats.buyCount.toLocaleString(
-      "fa-IR"
-    )} / فروش ${stats.sellCount.toLocaleString("fa-IR")})\n`;
+    // سایر ارزها
+    const finalCount = startBalance + (stats.buyCount - stats.sellCount);
+    const sign =
+      finalCount > startBalance
+        ? "🟢"
+        : finalCount < startBalance
+        ? "🔴"
+        : "⚪️";
+
+    msg += `${sign} ${cur}: ${formatter.format(
+      finalCount
+    )} (شروع ${formatter.format(startBalance)})\n`;
   }
 
-  msg += `\n💵 مجموع تومانی (طلا و سکه): ${totalToman.toLocaleString("fa-IR")} تومان\n`;
   return msg;
+}
+
+function startOfDay(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfDay(d) {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
 }
