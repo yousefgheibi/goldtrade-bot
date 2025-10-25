@@ -306,9 +306,16 @@ function showSummary(chatId) {
   if (fs.existsSync(dataFile))
     transactions = JSON.parse(fs.readFileSync(dataFile));
 
-  const today = DateTime.now().setZone("Asia/Tehran");
-  const start = today.startOf("day");
-  const end = today.endOf("day");
+  const now = new Date();
+
+  const offset = 3.5 * 60;
+  const localNow = new Date(now.getTime() + offset * 60 * 1000);
+
+  const start = new Date(localNow);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(localNow);
+  end.setHours(23, 59, 59, 999);
 
   const todayTx = getTransactionsInRange(transactions, start, end);
 
@@ -329,8 +336,7 @@ function showSummary(chatId) {
 
 function getTransactionsInRange(transactions, from, to) {
   return transactions.filter((t) => {
-    const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
-    return txDate >= from && txDate <= to;
+    return t.date >= from && t.date <= to;
   });
 }
 
