@@ -45,12 +45,12 @@ export function handleMessage(msg) {
   switch (text) {
     case "🟢 ثبت خرید":
       userState[chatId] = { type: "buy", step: "name" };
-      bot.sendMessage(chatId, "👤 لطفاً نام خریدار را وارد کنید:");
+      bot.sendMessage(chatId, "👤 لطفاً نام فروشنده را وارد کنید:");
       break;
 
     case "🔴 ثبت فروش":
       userState[chatId] = { type: "sell", step: "name" };
-      bot.sendMessage(chatId, "👤 لطفاً نام فروشنده را وارد کنید:");
+      bot.sendMessage(chatId, "👤 لطفاً نام خریدار را وارد کنید:");
       break;
 
     case "ثبت موجودی":
@@ -103,10 +103,7 @@ function handleInput(chatId, text) {
 
     case "itemType":
       if (!["طلا", "سکه", "ارز"].includes(text))
-        return bot.sendMessage(
-          chatId,
-          "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید."
-        );
+        return bot.sendMessage(chatId, "❌ لطفاً یکی از گزینه‌ها را انتخاب کنید.");
 
       state.itemType = text;
 
@@ -146,9 +143,7 @@ function handleInput(chatId, text) {
       state.amount = Number(text);
 
       if (state.itemType === "طلا") {
-        state.weight = parseFloat(
-          ((state.amount / state.priceMithqal) * 4.3318).toFixed(3)
-        );
+        state.weight = parseFloat(((state.amount / state.priceMithqal) * 4.3318).toFixed(3));
         state.step = "desc";
         bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
       } else {
@@ -165,23 +160,42 @@ function handleInput(chatId, text) {
 
     case "currencyType":
       state.currencyType = text;
-      state.step = "basePrice";
-      bot.sendMessage(chatId, "💰 قیمت پایه را وارد کنید:");
-      break;
-
-    case "basePrice":
-      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
-      state.basePrice = Number(text);
-      state.step = "quantity";
-      bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      state.step = "quantity"; // 👈 ابتدا تعداد را بپرس
+      bot.sendMessage(chatId, "🔢 لطفاً تعداد ارز را وارد کنید:");
       break;
 
     case "quantity":
       if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
       state.quantity = Number(text);
-      state.amount = state.basePrice * state.quantity;
-      state.step = "desc";
-      bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
+
+      // 👇 اگر نوع آیتم ارز است، حالا قیمت پایه را بپرس
+      if (state.itemType === "ارز") {
+        state.step = "basePrice";
+        bot.sendMessage(chatId, "💰 لطفاً قیمت پایه هر واحد ارز را وارد کنید:");
+        return;
+      }
+
+      // 👇 اگر نوع آیتم چیز دیگری بود (مثل سکه)
+      if (state.itemType === "سکه") {
+        state.amount = state.basePrice * state.quantity;
+        state.step = "desc";
+        bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
+      }
+      break;
+
+    case "basePrice":
+      if (isNaN(text)) return bot.sendMessage(chatId, "❌ فقط عدد وارد کنید.");
+      state.basePrice = Number(text);
+
+      if (state.itemType === "ارز") {
+        // 👇 حالا مبلغ کل رو محاسبه کن
+        state.amount = state.basePrice * state.quantity;
+        state.step = "desc";
+        bot.sendMessage(chatId, "📝 توضیحات (اختیاری) را وارد کنید:");
+      } else {
+        state.step = "quantity";
+        bot.sendMessage(chatId, "🔢 لطفاً تعداد را وارد کنید:");
+      }
       break;
 
     case "desc":
@@ -198,28 +212,17 @@ function handleInput(chatId, text) {
       }
 
       const curState = userState[chatId];
-      const currencies = curState.currencies || [
-        "تومان",
-        "دلار",
-        "یورو",
-        "لیر",
-      ];
+      const currencies = curState.currencies || ["تومان", "دلار", "یورو", "لیر"];
       const idx = curState.index ?? 0;
       const currentCurrency = currencies[idx];
 
       const cleaned = text.replace(/,/g, "").trim();
       if (cleaned === "") {
-        return bot.sendMessage(
-          chatId,
-          "❌ لطفاً یک عدد وارد کنید یا /cancel برای لغو."
-        );
+        return bot.sendMessage(chatId, "❌ لطفاً یک عدد وارد کنید یا /cancel برای لغو.");
       }
       const num = Number(cleaned);
       if (isNaN(num)) {
-        return bot.sendMessage(
-          chatId,
-          "❌ لطفاً فقط عدد وارد کنید. مثلاً: 5000000"
-        );
+        return bot.sendMessage(chatId, "❌ لطفاً فقط عدد وارد کنید. مثلاً: 5000000");
       }
 
       curState.balances[currentCurrency] = num;
@@ -311,7 +314,7 @@ function showSummary(chatId) {
   const msg = `📊 خلاصه وضعیت:
 -------------------------
 📆 تراکنش‌های امروز: ${todayTx.length}
-📆 تراز امروز: ${dailyProfit.toLocaleString("fa-IR")} تومان
+🧾 تراز امروز: ${dailyProfit.toLocaleString("fa-IR")} تومان
 📆 تراز دیروز: ${yesterdayProfit.toLocaleString("fa-IR")} تومان
 📅 تراز هفتگی: ${weeklyProfit.toLocaleString("fa-IR")} تومان
 -------------------------${balanceMsg}`;
@@ -361,6 +364,7 @@ function buildBalanceMessage(currencyStats, balances) {
 
   let msg = "\n💰 تراز دارایی‌ها:\n";
 
+  // 🔸 همه ارزها (حتی آنهایی که موجودی‌شان صفر است)
   const allCurrencies = Object.keys(currencyStats);
   for (const cur of allCurrencies) {
     if (["طلا", "سکه", "تومان"].includes(cur)) continue;
