@@ -45,12 +45,12 @@ export function handleMessage(msg) {
   switch (text) {
     case "🟢 ثبت خرید":
       userState[chatId] = { type: "buy", step: "name" };
-      bot.sendMessage(chatId, "👤 لطفاً نام فروشنده را وارد کنید:");
+      bot.sendMessage(chatId, "👤 لطفاً نام خریدار را وارد کنید:");
       break;
 
     case "🔴 ثبت فروش":
       userState[chatId] = { type: "sell", step: "name" };
-      bot.sendMessage(chatId, "👤 لطفاً نام خریدار را وارد کنید:");
+      bot.sendMessage(chatId, "👤 لطفاً نام فرشنده را وارد کنید:");
       break;
 
     case "ثبت موجودی":
@@ -306,12 +306,18 @@ function showSummary(chatId) {
   if (fs.existsSync(dataFile))
     transactions = JSON.parse(fs.readFileSync(dataFile));
 
-  const today = new Date();
-  const todayTx = getTransactionsInRange(
-    transactions,
-    startOfDay(today),
-    endOfDay(today)
-  );
+  const today = DateTime.now().setZone("Asia/Tehran");
+  const start = today.startOf("day");
+  const end = today.endOf("day");
+
+  function getTransactionsInRange(transactions, from, to) {
+    return transactions.filter((t) => {
+      const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
+      return txDate >= from && txDate <= to;
+    });
+  }
+
+  const todayTx = getTransactionsInRange(transactions, start, end);
 
   const dailyProfit = calculateProfit(todayTx);
 
@@ -392,16 +398,4 @@ function buildBalanceMessage(currencyStats, balances) {
   }
 
   return msg;
-}
-
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function endOfDay(d) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
 }
