@@ -19,6 +19,7 @@
     "fontconfig": "^0.5.0",
     "fs": "^0.0.1-security",
     "json2csv": "^6.0.0-alpha.2",
+    "luxon": "^3.7.2",
     "node-telegram-bot-api": "^0.66.0",
     "xlsx": "^0.18.5"
   },
