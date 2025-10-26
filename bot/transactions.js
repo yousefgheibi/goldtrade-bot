@@ -4,7 +4,7 @@ import { DATA_DIR, USERS_FILE } from "../config.js";
 import { sendMainMenu } from "./menu.js";
 import { createInvoiceImage } from "./invoice.js";
 import { exportExcel, exportUsers, exportAllData } from "./exports.js";
-const { DateTime } = require("luxon");
+import { DateTime } from "luxon";
 
 export const userState = {};
 
