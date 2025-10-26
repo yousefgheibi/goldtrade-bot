@@ -27,7 +27,7 @@ export function createInvoiceImage(entry, outputPath, callback) {
 
   ctx.fillStyle = "#333";
   ctx.font = "20px Vazirmatn";
-  ctx.fillText(`تاریخ: ${entry.date}`, startX, startY);
+  ctx.fillText(`تاریخ: ${new Date().toLocaleString("fa-IR", { timeZone: "Asia/Tehran" })}`, startX, startY);
   startY += lineHeight;
   ctx.fillText(
     `نوع تراکنش: ${entry.type === "buy" ? "خرید" : "فروش"}`,
