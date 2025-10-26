@@ -3,6 +3,7 @@ import XLSX from "xlsx";
 import AdmZip from "adm-zip";
 import { bot } from "./bot.js";
 import { DATA_DIR, EXPORT_DIR, USERS_FILE } from "../config.js";
+import { DateTime } from "luxon";
 
 export function exportExcel(chatId) {
   const userFile = `${DATA_DIR}/data_${chatId}.json`;
@@ -13,24 +14,34 @@ export function exportExcel(chatId) {
   if (!transactions.length)
     return bot.sendMessage(chatId, "❗ داده‌ای برای خروجی وجود ندارد.");
 
-  const formattedData = transactions.map((t) => ({
-    "نوع تراکنش": t.type === "buy" ? "خرید" : "فروش",
-    "نوع کالا": t.itemType,
-    "نام خریدار/فروشنده": t.name,
-    جزئیات:
-      t.itemType === "طلا"
-        ? `نام: ${t.name}`
-        : t.itemType === "سکه"
-        ? `نام: ${t.name}, نوع سکه: ${t.coinType}`
-        : `نام: ${t.name}, نوع ارز: ${t.currencyType}`,
-    "قیمت پایه / مثقال": (t.priceMithqal || t.basePrice)?.toLocaleString(
-      "fa-IR"
-    ),
-    "تعداد / وزن": (t.quantity || t.weight)?.toLocaleString("fa-IR"),
-    "مبلغ کل (تومان)": t.amount.toLocaleString("fa-IR"),
-    توضیحات: t.desc,
-    تاریخ: t.date,
-  }));
+ const formattedData = transactions.map((t) => {
+    let persianDate = "-";
+    try {
+      const dt = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
+      if (dt.isValid) {
+        persianDate = dt.setLocale("fa").toFormat("yyyy/LL/dd - HH:mm");
+      }
+    } catch {
+      persianDate = t.date;
+    }
+
+    let details = "-";
+    if (t.itemType === "سکه") details = `نوع سکه: ${t.coinType}`;
+    else if (t.itemType === "ارز") details = `نوع ارز: ${t.currencyType}`;
+    else if (t.itemType === "طلا") details = "طلا";
+
+    return {
+      "نوع تراکنش": t.type === "buy" ? "خرید" : "فروش",
+      "نوع کالا": t.itemType,
+      "نام خریدار/فروشنده": t.name,
+      "جزئیات": details,
+      "قیمت پایه / مثقال": (t.priceMithqal || t.basePrice)?.toLocaleString("fa-IR"),
+      "تعداد / وزن": (t.quantity || t.weight)?.toLocaleString("fa-IR"),
+      "مبلغ کل (تومان)": t.amount.toLocaleString("fa-IR"),
+      "توضیحات": t.desc || "-",
+      "تاریخ": persianDate,
+    };
+  });
 
   const worksheet = XLSX.utils.json_to_sheet(formattedData);
   const workbook = XLSX.utils.book_new();

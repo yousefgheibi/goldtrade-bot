@@ -277,7 +277,7 @@ function saveTransaction(chatId, record) {
 
   const entry = {
     ...record,
-    date: new Date().toLocaleString("fa-IR", { timeZone: "Asia/Tehran" }),
+    date: DateTime.now().setZone("Asia/Tehran").toISO(),
   };
   transactions.push(entry);
   fs.writeFileSync(userFile, JSON.stringify(transactions, null, 2));
@@ -330,8 +330,13 @@ function showSummary(chatId) {
 
 function getTransactionsInRange(transactions, from, to) {
   return transactions.filter(t => {
-    const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
-    return txDate >= from && txDate <= to;
+    try {
+      const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
+      if (!txDate.isValid) return false;
+      return txDate >= from && txDate <= to;
+    } catch {
+      return false;
+    }
   });
 }
 
