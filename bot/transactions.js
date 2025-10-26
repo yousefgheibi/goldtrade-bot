@@ -350,12 +350,15 @@ function showSummary(chatId) {
     }, {})
   );
 
+  console.log('balances',balances);
+  console.log('modifiedObj',modifiedObj)
   const result = calculateFinalAssets(balances, modifiedObj);
   console.log(result.textSummary.join("\n"));
   const msg = `📊 خلاصه وضعیت:
 -------------------------
 📆 تراکنش‌های امروز: ${todayTx.length}
-🧾 تراز مالی: ${result.textSummary.join("\n")}
+🧾 تراز مالی: \n
+${result.textSummary.join("\n")}
 -------------------------`;
 
   bot.sendMessage(chatId, msg);
