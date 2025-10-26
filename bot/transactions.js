@@ -350,13 +350,10 @@ function showSummary(chatId) {
     }, {})
   );
 
-  console.log('balances',balances);
-  console.log('modifiedObj',modifiedObj)
   const result = calculateFinalAssets(balances, modifiedObj);
-  console.log(result.textSummary.join("\n"));
   const msg = `📊 خلاصه وضعیت:
 -------------------------
-📆 تراکنش‌های امروز: ${todayTx.length}
+📆 تراکنش‌های امروز: ${(todayTx.length).toLocaleString("fa-IR")}
 🧾 تراز مالی: \n
 ${result.textSummary.join("\n")}
 -------------------------`;
@@ -405,7 +402,7 @@ function calculateFinalAssets(initialAssets, transactionList) {
 
   finalAssets["تومان"] = totalToman;
   textSummary.unshift(
-    `تومان : ${totalToman} (شروع : ${initialAssets["تومان"].toLocaleString("fa-IR")})`
+    `تومان : ${totalToman.toLocaleString("fa-IR")} (شروع : ${initialAssets["تومان"].toLocaleString("fa-IR")})`
   );
 
   return { finalAssets, textSummary };
