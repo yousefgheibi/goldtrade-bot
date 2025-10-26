@@ -294,6 +294,18 @@ function saveTransaction(chatId, record) {
   setTimeout(() => sendMainMenu(chatId), 1000);
 }
 
+function getTransactionsInRange(transactions, from, to) {
+  return transactions.filter((t) => {
+    try {
+      const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
+      if (!txDate.isValid) return false;
+      return txDate >= from && txDate <= to;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function showSummary(chatId) {
   const balanceFile = `${DATA_DIR}/balance_${chatId}.json`;
   const dataFile = `${DATA_DIR}/data_${chatId}.json`;
@@ -313,88 +325,85 @@ function showSummary(chatId) {
 
   const todayTx = getTransactionsInRange(transactions, start, end);
 
-  const dailyProfit = calculateProfit(todayTx);
+  const modifiedObj = Object.values(
+    todayTx.reduce((acc, t) => {
+      if (!acc[t.currencyType]) {
+        acc[t.currencyType] = {
+          currencyType: t.currencyType,
+          totalBuy: 0,
+          totalSell: 0,
+        };
+      }
 
-  const currencyStats = calculateCurrencyStats(transactions);
+      const isGoldOrCoin = ["طلا", "تمام سکه", "نیم سکه", "ربع سکه"].includes(
+        t.currencyType
+      );
+      const value = isGoldOrCoin ? t.amount || 0 : t.quantity || 0;
 
-  const balanceMsg = buildBalanceMessage(currencyStats, balances);
+      if (t.type === "buy") {
+        acc[t.currencyType].totalBuy += value;
+      } else if (t.type === "sell") {
+        acc[t.currencyType].totalSell += value;
+      }
 
+      return acc;
+    }, {})
+  );
+
+  const result = calculateFinalAssets(balances, modifiedObj);
+  console.log(result.textSummary.join("\n"));
   const msg = `📊 خلاصه وضعیت:
 -------------------------
 📆 تراکنش‌های امروز: ${todayTx.length}
-🧾 تراز مالی: ${dailyProfit.toLocaleString("fa-IR")} تومان
--------------------------${balanceMsg}`;
+🧾 تراز مالی: ${result.textSummary.join("\n")}
+-------------------------`;
 
   bot.sendMessage(chatId, msg);
 }
 
-function getTransactionsInRange(transactions, from, to) {
-  return transactions.filter(t => {
-    try {
-      const txDate = DateTime.fromISO(t.date, { zone: "Asia/Tehran" });
-      if (!txDate.isValid) return false;
-      return txDate >= from && txDate <= to;
-    } catch {
-      return false;
+function calculateFinalAssets(initialAssets, transactionList) {
+  const finalAssets = {};
+  const textSummary = [];
+
+  let totalToman = initialAssets["تومان"] || 0;
+
+  const txMap = transactionList.reduce((acc, tx) => {
+    if (!acc[tx.currencyType]) {
+      acc[tx.currencyType] = { totalBuy: 0, totalSell: 0 };
     }
-  });
-}
-
-function calculateProfit(txList) {
-  const buy = txList
-    .filter((t) => t.type === "buy")
-    .reduce((s, t) => s + t.amount, 0);
-  const sell = txList
-    .filter((t) => t.type === "sell")
-    .reduce((s, t) => s + t.amount, 0);
-  return sell - buy;
-}
-
-function calculateCurrencyStats(transactions) {
-  const stats = {};
-  for (const tx of transactions) {
-    const cur = tx.currencyType || tx.itemType || "تومان";
-    if (!stats[cur]) stats[cur] = { buyCount: 0, sellCount: 0 };
-
-    const count = Number(tx.count) || 0;
-    if (tx.type === "buy") stats[cur].buyCount += count;
-    else if (tx.type === "sell") stats[cur].sellCount += count;
-  }
-
-  return stats;
-}
-function buildBalanceMessage(currencyStats, balances) {
-  let msg = "\n💰 تراز دارایی‌ها:\n";
-  const formatter = new Intl.NumberFormat("fa-IR");
+    acc[tx.currencyType].totalBuy += tx.totalBuy || 0;
+    acc[tx.currencyType].totalSell += tx.totalSell || 0;
+    return acc;
+  }, {});
 
   const allCurrencies = new Set([
-    ...Object.keys(currencyStats),
-    ...Object.keys(balances),
+    ...Object.keys(initialAssets),
+    ...Object.keys(txMap),
   ]);
 
-  for (const cur of allCurrencies) {
-    const stats = currencyStats[cur] || { buyCount: 0, sellCount: 0 };
-    const startBalance = Number(balances[cur]) || 0;
+  allCurrencies.forEach((currency) => {
+    if (currency === "تومان") return;
 
-    if (cur === "طلا") {
-      const finalToman = startBalance + (stats.buyCount - stats.sellCount);
-      msg += `🏅 ${cur}: ${formatter.format(finalToman)} تومان\n`;
-      continue;
+    const startAmount = initialAssets[currency] || 0;
+    const tx = txMap[currency] || { totalBuy: 0, totalSell: 0 };
+
+    const totalBuy = tx.totalBuy || 0;
+    const totalSell = tx.totalSell || 0;
+
+    const finalAmount = startAmount - totalSell + totalBuy;
+
+    if (["طلا", "نیم سکه", "تمام سکه", "ربع سکه"].includes(currency)) {
+      totalToman += finalAmount - startAmount;
+    } else {
+      finalAssets[currency] = finalAmount;
+      textSummary.push(`${currency} : ${finalAmount} (شروع : ${startAmount})`);
     }
+  });
 
-    // سایر ارزها
-    const finalCount = startBalance + (stats.buyCount - stats.sellCount);
-    const sign =
-      finalCount > startBalance
-        ? "🟢"
-        : finalCount < startBalance
-        ? "🔴"
-        : "⚪️";
+  finalAssets["تومان"] = totalToman;
+  textSummary.unshift(
+    `تومان : ${totalToman} (شروع : ${initialAssets["تومان"]})`
+  );
 
-    msg += `${sign} ${cur}: ${formatter.format(
-      finalCount
-    )} (شروع ${formatter.format(startBalance)})\n`;
-  }
-
-  return msg;
+  return { finalAssets, textSummary };
 }

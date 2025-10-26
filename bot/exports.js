@@ -44,6 +44,17 @@ export function exportExcel(chatId) {
   });
 
   const worksheet = XLSX.utils.json_to_sheet(formattedData);
+  worksheet["!cols"] = [
+    { wch: 12 }, // نوع تراکنش
+    { wch: 12 }, // نوع کالا
+    { wch: 20 }, // نام
+    { wch: 18 }, // جزئیات
+    { wch: 20 }, // قیمت پایه
+    { wch: 15 }, // تعداد / وزن
+    { wch: 20 }, // مبلغ کل
+    { wch: 30 }, // توضیحات
+    { wch: 22 }, // تاریخ
+  ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "تراکنش‌ها");
 
