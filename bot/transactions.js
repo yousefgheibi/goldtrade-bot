@@ -335,7 +335,7 @@ function showSummary(chatId) {
         };
       }
 
-      const isGoldOrCoin = ["طلا", "تمام سکه", "نیم سکه", "ربع سکه"].includes(
+      const isGoldOrCoin = ["طلا", "تمام سکه", "نیم سکه", "ربع سکه", undefined,"undefined"].includes(
         t.currencyType
       );
       const value = isGoldOrCoin ? t.amount || 0 : t.quantity || 0;
@@ -395,7 +395,7 @@ function calculateFinalAssets(initialAssets, transactionList) {
 
     const finalAmount = startAmount - totalSell + totalBuy;
 
-    if (["طلا", "نیم سکه", "تمام سکه", "ربع سکه"].includes(currency)) {
+    if (["طلا", "تمام سکه", "نیم سکه", "ربع سکه", undefined,"undefined"].includes(currency)) {
       totalToman += finalAmount - startAmount;
     } else {
       finalAssets[currency] = finalAmount;
@@ -405,7 +405,7 @@ function calculateFinalAssets(initialAssets, transactionList) {
 
   finalAssets["تومان"] = totalToman;
   textSummary.unshift(
-    `تومان : ${totalToman} (شروع : ${initialAssets["تومان"]})`
+    `تومان : ${totalToman} (شروع : ${initialAssets["تومان"].toLocaleString("fa-IR")})`
   );
 
   return { finalAssets, textSummary };

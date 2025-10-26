@@ -67,7 +67,7 @@ export function createInvoiceImage(entry, outputPath, callback) {
       startY
     );
     startY += lineHeight;
-    ctx.fillText(`تعداد: ${entry.quantity}`, startX, startY);
+    ctx.fillText(`تعداد: ${entry.quantity.toLocaleString("fa-IR")}`, startX, startY);
     startY += lineHeight;
     ctx.fillText(
       `مبلغ کل: ${entry.amount.toLocaleString("fa-IR")} میلیون تومان`,
